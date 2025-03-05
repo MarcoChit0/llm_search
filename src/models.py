@@ -1,27 +1,6 @@
-from __future__ import annotations
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import torch
 import os
-
-class State:
-    def __init__(self, message : dict, state : State | None = None, tokens : int = 0) -> None:
-        if state is not None:
-            state.add_children(self)
-        self._message = message
-        self._tokens = tokens
-        self._next = []
-        self._parent = state
-    
-    def add_children(self, child : State) -> None:
-        self._next.append(child)
-    
-    def get_messages(self) -> list[dict]:
-        messages = []
-        current = self
-        while current is not None:
-            messages.insert(0, current._message)
-            current = current._parent
-        return messages
 
 
 class Model:
@@ -40,30 +19,29 @@ class Model:
         self._model = AutoModelForCausalLM.from_pretrained(f"{model_path}/{model_name}", **model_config, token=token)
         self._generated_tokens = 0 
 
-    
-    def generate_text(self, prompt: str, state:State|None = None, **kwargs) -> list[State]:
+    def generate_text(self, prompt: str, **kwargs) -> list[str]:
+        print(kwargs)
         new_message = self.wrap_prompt(prompt)
-        s = State(new_message, state)
-        messages = s.get_messages()
 
         generator = pipeline(
             "text-generation", 
             model=self._model, 
             tokenizer=self._tokenizer)
         # response = [{'generated_text': messages:list[dict]}, {'generated_text': messages:list[dict]}, ...], where the last message is the newly produced text
-        response = generator(messages, **kwargs) 
-
-        states = []
+        print()
+        print(new_message)
+        response = generator(new_message, **kwargs) 
+        print(response)
+        print()
+        candidates = []
         for candidate in response:
-            candidate_message = candidate['generated_text'][-1]
-            tokens = len(self._tokenizer.encode(candidate_message['content']))
-            self._generated_tokens += tokens
-            new_state = State(candidate_message, state, tokens)
-            states.append(new_state)
-        return states
+            candidate_message = candidate['generated_text'][-1]['content']
+            candidates.append(candidate_message)
+            self._generated_tokens += len(self._tokenizer.encode(candidate_message))
+        return candidates
 
-    def wrap_prompt(self, prompt: str) -> dict:
-        return {'role': 'system', 'content': prompt}
+    def wrap_prompt(self, prompt: str) -> list[dict]:
+        return [{'role': 'user', 'content': prompt}]
         
     @classmethod
     def get_available_models(cls) -> list[str]:
@@ -89,6 +67,9 @@ class LlamaModel(Model):
             if 'torch_dtype' not in kwargs['model_config']:
                 kwargs['model_config']['torch_dtype'] = torch.bfloat16
         super().__init__(**kwargs)
+    
+    def wrap_prompt(self, prompt):
+        return [{'role': 'system', 'content': 'Resolve the problem efficiently and clearly. Provide a concise solution with no explanation.'}] + super().wrap_prompt(prompt)
 
     @classmethod
     def get_available_models(cls) -> list[str]:
@@ -108,25 +89,3 @@ def get_model(**kwargs) -> Model:
             return model_class(**kwargs)
     
     raise ValueError(f"Model {model_name} is not available.")
-
-params = {
-    "model_name": "llama-3.2-1B-Instruct",
-    "model_config": {"torch_dtype": torch.bfloat16},
-    "tokenizer_config": {}
-}
-m = get_model(**params)
-
-generation_args = {
-    "max_new_tokens": 500,
-    "num_return_sequences": 3,
-    "do_sample": True,
-    "temperature": 0.7,
-}
-message = [{"role": "system", "content": "Hello, how can I help you today?"}]
-s = State(message[0])
-p = "I want to book a flight to Paris."
-
-r = m.generate_text(p, s, **generation_args)
-for state in r:
-    print(state.get_messages())
-        
