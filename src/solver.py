@@ -8,19 +8,32 @@ import heapq
 # problem_definition = """Problem: Given a set of four numbers, determine whether it is possible to reach 24 using those numbers and the basic arithmetic operations: addition (+), subtraction (-), multiplication (*), and division (/).
 
 # problem_definition = """For each task, provide a consice solution with minimal explanation."""
+# params = {
+#     "model_name": "llama-3.2-1B-Instruct",
+#     "model_config": {"torch_dtype": torch.bfloat16},
+#     "tokenizer_config": {}
+# }
+# m = get_model(**params)
+# print(params)
+# generation_args = {
+#     "max_new_tokens": 500,
+#     "num_return_sequences": 5,
+#     "do_sample": True,
+#     "temperature": 0.7,
+# }
+
 params = {
-    "model_name": "llama-3.2-1B-Instruct",
-    "model_config": {"torch_dtype": torch.bfloat16},
-    "tokenizer_config": {}
+    "model_name": "gemini-1.5-flash-8b",
 }
 m = get_model(**params)
-print(params)
 generation_args = {
-    "max_new_tokens": 500,
-    "num_return_sequences": 5,
-    "do_sample": True,
+    "max_output_tokens": 500,
+    "candidate_count": 5,
     "temperature": 0.7,
 }
+
+
+
 successor_generator = ProposeModelBasedSuccessorGenerator(m, generation_args)
 state_evaluator = VoteModelBasedStateEvaluator(m, generation_args)
 

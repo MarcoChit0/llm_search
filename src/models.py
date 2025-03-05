@@ -1,12 +1,27 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import torch
 import os
+import abc
 
-
-class Model:
+class Model(abc.ABC):
     def __init__(self, **kwargs) -> None:
-        
         self.__dict__.update(kwargs)
+
+    def wrap_prompt(self, prompt: str) -> list[dict]:
+        return [{'role': 'user', 'content': prompt}]
+
+    @abc.abstractmethod
+    def generate_text(self, prompt: str, **kwargs) -> list[str]:
+        raise NotImplementedError
+
+    @classmethod
+    @abc.abstractmethod
+    def get_available_models(cls) -> list[str]:
+        raise NotImplementedError
+
+class HuggingFaceModel(Model):
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
         model_path = self.__dict__.get('model_path')
         model_name = self.__dict__.get('model_name')
         token = os.getenv('HUGGINGFACE_TOKEN')
@@ -20,7 +35,6 @@ class Model:
         self._generated_tokens = 0 
 
     def generate_text(self, prompt: str, **kwargs) -> list[str]:
-        print(kwargs)
         new_message = self.wrap_prompt(prompt)
 
         generator = pipeline(
@@ -40,14 +54,7 @@ class Model:
             self._generated_tokens += len(self._tokenizer.encode(candidate_message))
         return candidates
 
-    def wrap_prompt(self, prompt: str) -> list[dict]:
-        return [{'role': 'user', 'content': prompt}]
-        
-    @classmethod
-    def get_available_models(cls) -> list[str]:
-        raise NotImplementedError
-
-class QwenModel(Model):
+class QwenModel(HuggingFaceModel):
     def __init__(self, **kwargs) -> None:
         kwargs['model_path'] = 'Qwen'
         super().__init__(**kwargs)
@@ -58,7 +65,7 @@ class QwenModel(Model):
                 "Qwen2.5-1.5B", "Qwen2.5-1.5B-Instruct",
                 "Qwen2.5-3B", "Qwen2.5-3B-Instruct"]
 
-class LlamaModel(Model):
+class LlamaModel(HuggingFaceModel):
     def __init__(self, **kwargs) -> None:
         kwargs['model_path'] = 'meta-llama'
         if 'model_config' not in kwargs:
@@ -78,12 +85,49 @@ class LlamaModel(Model):
                 "llama-3.1-8B", "llama-3.1-8B-Instruct",
                 "llama-3.1-70B", "llama-3.1-70B-Instruct"]
 
+
+from google import genai
+from google.genai import types
+class GeminiModel(Model):
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.api_key = os.getenv("GEMINI_API_KEY")
+        if self.api_key is None:
+            raise ValueError("GEMINI_API_KEY environment variable not set")
+        self.client = genai.Client(api_key=self.api_key)
+        self.response_tokens = 0 
+        self.prompt_tokens = 0
+        self.total_tokens = 0
+    
+    @classmethod
+    def get_available_models(cls) -> list[str]:
+        return ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview-02-05", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"]
+
+    def generate_text(self, prompt: str, **kwargs) -> list[str]:
+        new_message = self.wrap_prompt(prompt)
+        model_name = self.__dict__.get('model_name')
+        generation_args = kwargs.get('generation_args', {})
+        response = self.client.models.generate_content(model=model_name, contents=new_message, config=types.GenerateContentConfig(**generation_args))
+
+        candidates = []
+        for candidate in response.candidates:
+            candidate_content = ""
+            for part in candidate.content.parts:
+                candidate_content += part.text
+            candidates.append(candidate_content)
+
+        self.response_tokens += response.usage_metadata.candidates_token_count
+        self.prompt_tokens += response.usage_metadata.prompt_token_count
+        self.total_tokens += response.usage_metadata.total_token_count
+
+        return candidates
+
 def get_model(**kwargs) -> Model:
     model_name = kwargs.get('model_name')
     if not model_name:
         raise ValueError("model_name is required.")
     
-    model_classes = [QwenModel, LlamaModel]
+    model_classes = [QwenModel, LlamaModel, GeminiModel]
     for model_class in model_classes:
         if model_name in model_class.get_available_models():
             return model_class(**kwargs)
