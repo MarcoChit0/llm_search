@@ -1,5 +1,5 @@
 from state import *
-from llm-search.models import Model
+from llm_search.models import Model
 import numpy as np
 import abc
 
