@@ -65,7 +65,17 @@ class ModelBasedSuccessorGenerator(SuccessorGenerator):
 
 class ProposeModelBasedSuccessorGenerator(ModelBasedSuccessorGenerator):
     def get_actions_generation_prompt(self, state:State) -> str:
-        propose_prompt = '''Input: 2 8 8 14
+        propose_prompt = """Given a list of numbers, propose possible next steps using basic arithmetic operations: addition (+), subtraction (-), multiplication (*), and division (/). Each step must involve exactly two numbers from the list, and the result should replace those two numbers in a new list.
+
+Rules:
+- Only use basic arithmetic operations.
+- Each operation should be displayed in the format:
+  number [operation] number = result (left: updated list)
+- List each possible next step on a separate line.
+
+Example:
+
+Input:  2 8 8 14
 Possible next steps:
 2 + 8 = 10 (left: 8 10 14)
 8 / 2 = 4 (left: 4 8 14)
@@ -75,9 +85,11 @@ Possible next steps:
 14 - 8 = 6 (left: 2 6 8)
 14 / 2 = 7 (left: 7 8 8)
 14 - 2 = 12 (left: 8 8 12)
+
+Now, generate the possible next steps for the following input:
+
 Input: {input}
-Possible next steps:
-'''
+Possible next steps:"""
         return propose_prompt.format(input=state._data)
     
     def parse_actions_generation_response_into_actions(self, response: list[str]) -> list[str]:

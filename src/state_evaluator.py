@@ -1,5 +1,5 @@
 from state import *
-from models import *
+from llm-search.models import Model
 import numpy as np
 import abc
 
@@ -23,16 +23,36 @@ class ModelBasedStateEvaluator(StateEvaluator):
 
 class VoteModelBasedStateEvaluator(ModelBasedStateEvaluator):
     def get_evaluation_prompt(self, state:State) -> str: 
-        vote_prompt = '''Below, there are several candidate steps for the Input {input}. Please, vote for the most promising one to reach the target number 24, using only basic arithmetic operations (addition, subtraction, multiplication, and division). The response should only be the selected candidate step. Candidate steps:
-{candidate_steps}
-Vote:'''
+        vote_prompt = """Given a list of candidate steps, select the best one to move toward the target number 24 using basic arithmetic operations: addition (+), subtraction (-), multiplication (*), and division (/).  
+
+Rules:  
+- Choose only one candidate step.  
+- The response must contain **only** the selected step.  
+
+Example:  
+
+Input:  2 8 8 14  
+Candidate steps:  
+8 - 2 = 6 (left: 6 8 14)
+14 - 8 = 6 (left: 2 6 8)
+14 / 2 = 7 (left: 7 8 8)
+14 - 2 = 12 (left: 8 8 12)
+
+Vote: 14 - 8 = 6 (left: 2 6 8)  
+
+Now, select the best step for the following input:  
+
+Input: {input}  
+Candidate steps:  
+{candidate_steps}  
+
+Vote:"""
         return vote_prompt.format(input=state._data, candidate_steps='\n'.join(list(state._children.keys())))
 
     '''
     The successor state whose action is the most voted by the model receives a value of 0. The remaining states maintain ther values as infinity.
     '''
     def evaluate_state_batch(self, state_batch:list[State]) -> None:
-        state_batch[0].print()
         parent_state:State = state_batch[0]._parent
         if parent_state is None:
             raise ValueError("Missing the argument parent_state for vote evaluation.")

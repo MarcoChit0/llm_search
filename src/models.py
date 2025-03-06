@@ -42,11 +42,7 @@ class HuggingFaceModel(Model):
             model=self._model, 
             tokenizer=self._tokenizer)
         # response = [{'generated_text': messages:list[dict]}, {'generated_text': messages:list[dict]}, ...], where the last message is the newly produced text
-        print()
-        print(new_message)
         response = generator(new_message, **kwargs) 
-        print(response)
-        print()
         candidates = []
         for candidate in response:
             candidate_message = candidate['generated_text'][-1]['content']
@@ -104,11 +100,9 @@ class GeminiModel(Model):
         return ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview-02-05", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"]
 
     def generate_text(self, prompt: str, **kwargs) -> list[str]:
-        new_message = self.wrap_prompt(prompt)
         model_name = self.__dict__.get('model_name')
         generation_args = kwargs.get('generation_args', {})
-        response = self.client.models.generate_content(model=model_name, contents=new_message, config=types.GenerateContentConfig(**generation_args))
-
+        response = self.client.models.generate_content(model=model_name, contents=prompt, config=types.GenerateContentConfig(**generation_args))
         candidates = []
         for candidate in response.candidates:
             candidate_content = ""
