@@ -1,8 +1,8 @@
 import numpy as np
-from models import *
-from llm_search.successor_generator import ProposeModelBasedSuccessorGenerator
+from llm_search.models import *
+from llm_search.successor_generator import *
 from llm_search.state import State
-from llm_search.state_evaluator import VoteModelBasedStateEvaluator
+from llm_search.state_evaluator import *
 import heapq
 
 params = {
@@ -29,23 +29,23 @@ generation_args = {
 #     "temperature": 0.7,
 # }
 
-
-
 successor_generator = ProposeModelBasedSuccessorGenerator(m, generation_args)
 state_evaluator = VoteModelBasedStateEvaluator(m, generation_args)
 
-states = [State( "1 2 4 6")]
-heapq.heapify(states)
-for i in range(3):
-    s = heapq.heappop(states)
-    print("-------------\nState:")
-    s.print()
-    successors = successor_generator.generate_successors(s)
-    print("Successors:")
-    for s_ in successors:
-        s_.print()
-    state_evaluator.evaluate_state_batch(successors)
-    for succ in successors:
-        heapq.heappush(states, succ)
-print("Final state:")
-heapq.heappop(states).print()
+class Solver:
+    def __init__(self, sucessor_generator:SuccessorGenerator, state_evaluator:StateEvaluator, **kwargs):
+        self._sucessor_generator = sucessor_generator
+        self._state_evaluator = state_evaluator
+        self.__dict__.update(kwargs)
+    
+    def solve(self, initial_state:State):
+        steps = self.__dict__.get("steps")
+        states = [initial_state]
+        heapq.heapify(states)
+        for i in range(steps):
+            s = heapq.heappop(states)
+            successors = self._sucessor_generator.generate_successors(s)
+            self._state_evaluator.evaluate_state_batch(successors)
+            for succ in successors:
+                heapq.heappush(states, succ)
+        return heapq.heappop(states)

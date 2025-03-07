@@ -2,21 +2,17 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import torch
 import os
 import abc
+from llm_search.register import *
 
-class Model(abc.ABC):
+class Model(Register):
     def __init__(self, **kwargs) -> None:
-        self.__dict__.update(kwargs)
+        super().__init__(MODEL_REGISTRY, **kwargs)
 
     def wrap_prompt(self, prompt: str) -> list[dict]:
         return [{'role': 'user', 'content': prompt}]
 
     @abc.abstractmethod
     def generate_text(self, prompt: str, **kwargs) -> list[str]:
-        raise NotImplementedError
-
-    @classmethod
-    @abc.abstractmethod
-    def get_available_models(cls) -> list[str]:
         raise NotImplementedError
 
 class HuggingFaceModel(Model):
@@ -56,7 +52,7 @@ class QwenModel(HuggingFaceModel):
         super().__init__(**kwargs)
     
     @classmethod
-    def get_available_models(cls) -> list[str]:
+    def get_entries(cls) -> list[str]:
         return ["Qwen2.5-0.5B", "Qwen2.5-0.5B-Instruct",
                 "Qwen2.5-1.5B", "Qwen2.5-1.5B-Instruct",
                 "Qwen2.5-3B", "Qwen2.5-3B-Instruct"]
@@ -75,7 +71,7 @@ class LlamaModel(HuggingFaceModel):
         return [{'role': 'system', 'content': 'Resolve the problem efficiently and clearly. Provide a concise solution with no explanation.'}] + super().wrap_prompt(prompt)
 
     @classmethod
-    def get_available_models(cls) -> list[str]:
+    def get_entries(cls) -> list[str]:
         return ["llama-3.2-1B", "llama-3.2-1B-Instruct",
                 "llama-3.2-3B", "llama-3.2-3B-Instruct",
                 "llama-3.1-8B", "llama-3.1-8B-Instruct",
@@ -96,7 +92,7 @@ class GeminiModel(Model):
         self.total_tokens = 0
     
     @classmethod
-    def get_available_models(cls) -> list[str]:
+    def get_entries(cls) -> list[str]:
         return ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview-02-05", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"]
 
     def generate_text(self, prompt: str, **kwargs) -> list[str]:
@@ -123,7 +119,7 @@ def get_model(**kwargs) -> Model:
     
     model_classes = [QwenModel, LlamaModel, GeminiModel]
     for model_class in model_classes:
-        if model_name in model_class.get_available_models():
+        if model_name in model_class.get_entries():
             return model_class(**kwargs)
     
     raise ValueError(f"Model {model_name} is not available.")

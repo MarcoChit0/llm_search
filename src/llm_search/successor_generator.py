@@ -1,13 +1,13 @@
-from state import *
+from llm_search.state import *
 from typing import Dict, List
-from models import *
+from llm_search.models import *
 import re
 import abc
 
-class SuccessorGenerator(abc.ABC):
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
+class SuccessorGenerator(Register, abc.ABC):
+    def __init__(self,**kwargs) -> None:
         self._available_actions:Dict[State, list[str]] = {}
+        super().__init__(STATE_EVALUATOR_REGISTRY, **kwargs)
 
     @abc.abstractmethod
     def get_actions(self, state:State) -> list[str]:
@@ -64,6 +64,13 @@ class ModelBasedSuccessorGenerator(SuccessorGenerator):
 
 
 class ProposeModelBasedSuccessorGenerator(ModelBasedSuccessorGenerator):
+    def __init__(self, model, text_generation_args, **kwargs):
+        super().__init__(model, text_generation_args, **kwargs)
+
+    @classmethod
+    def get_entries(cls) -> list[str]:
+        return ["propose"]
+
     def get_actions_generation_prompt(self, state:State) -> str:
         propose_prompt = """Given a list of numbers, propose possible next steps using basic arithmetic operations: addition (+), subtraction (-), multiplication (*), and division (/). Each step must involve exactly two numbers from the list, and the result should replace those two numbers in a new list.
 

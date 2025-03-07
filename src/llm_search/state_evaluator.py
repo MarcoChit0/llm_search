@@ -1,21 +1,22 @@
-from state import *
+from llm_search.state import *
 from llm_search.models import Model
+from llm_search.register import *
 import numpy as np
 import abc
 
-class StateEvaluator(abc.ABC):
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-    
+class StateEvaluator(Register, abc.ABC): 
+    def __init__(self, names:list[str], **kwargs) -> None:
+        super().__init(STATE_EVALUATOR_REGISTRY, names, **kwargs)
+
     @abc.abstractmethod
     def evaluate_state_batch(self, state_batch: list[State]) -> None:
         raise NotImplementedError
 
 class ModelBasedStateEvaluator(StateEvaluator):
-    def __init__(self, model: Model, text_generation_args: dict, **kwargs):
+    def __init__(self, names:list[str], model: Model, text_generation_args: dict, **kwargs):
         self._model: Model = model
         self._text_generation_args:dict = text_generation_args
-        super().__init__(**kwargs)
+        super().__init__(names, **kwargs)
     
     @abc.abstractmethod
     def get_evaluation_prompt(self, state:State) -> str:
