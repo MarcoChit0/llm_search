@@ -5,11 +5,7 @@ import abc
 from llm_search.register import *
 
 class Model(Register):
-    def __init__(self, **kwargs) -> None:
-        super().__init__(MODEL_REGISTRY, **kwargs)
-
-    def wrap_prompt(self, prompt: str) -> list[dict]:
-        return [{'role': 'user', 'content': prompt}]
+    registry = MODEL_REGISTRY
 
     @abc.abstractmethod
     def generate_text(self, prompt: str, **kwargs) -> list[str]:
@@ -29,6 +25,9 @@ class HuggingFaceModel(Model):
         self._tokenizer = AutoTokenizer.from_pretrained(f"{model_path}/{model_name}", **tokenizer_config, token=token)
         self._model = AutoModelForCausalLM.from_pretrained(f"{model_path}/{model_name}", **model_config, token=token)
         self._generated_tokens = 0 
+
+    def wrap_prompt(self, prompt: str) -> list[dict]:
+        return [{'role': 'user', 'content': prompt}]
 
     def generate_text(self, prompt: str, **kwargs) -> list[str]:
         new_message = self.wrap_prompt(prompt)
@@ -111,15 +110,3 @@ class GeminiModel(Model):
         self.total_tokens += response.usage_metadata.total_token_count
 
         return candidates
-
-def get_model(**kwargs) -> Model:
-    model_name = kwargs.get('model_name')
-    if not model_name:
-        raise ValueError("model_name is required.")
-    
-    model_classes = [QwenModel, LlamaModel, GeminiModel]
-    for model_class in model_classes:
-        if model_name in model_class.get_entries():
-            return model_class(**kwargs)
-    
-    raise ValueError(f"Model {model_name} is not available.")

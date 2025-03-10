@@ -4,10 +4,12 @@ from llm_search.models import *
 import re
 import abc
 
-class SuccessorGenerator(Register, abc.ABC):
+class SuccessorGenerator(Register):
+    registry = SUCCESSOR_GENERATOR_REGISTRY
+    
     def __init__(self,**kwargs) -> None:
         self._available_actions:Dict[State, list[str]] = {}
-        super().__init__(STATE_EVALUATOR_REGISTRY, **kwargs)
+        super().__init__(**kwargs)
 
     @abc.abstractmethod
     def get_actions(self, state:State) -> list[str]:
