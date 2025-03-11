@@ -52,26 +52,29 @@ if __name__ == "__main__":
     model = get_registered_class(parser.class_model, "model").from_config({
         "model_name": parser.class_model,
         "model_config": {"load_in_8bit": parser.load_in_8bit},
-        "tokenizer_config": {}
+        "tokenizer_config": {},
     })
-    generation_args = {
+    text_generation_args = {
         "max_output_tokens": parser.max_output_tokens,
         "candidate_count": parser.candidate_count,
         "do_sample": parser.do_sample,
         "temperature": parser.temperature,
     }
+    text_generation_args = text_generation_args_mapping(type(model), text_generation_args)
+
     successor_generator = get_registered_class(parser.class_successor_generator, "successor_generator").from_config({
         "model": model,
-        "text_generation_args": generation_args
+        "text_generation_args": text_generation_args
     })
     state_evaluator = get_registered_class(parser.class_state_evaluator, "state_evaluator").from_config({
         "model": model,
-        "text_generation_args": generation_args
+        "text_generation_args": text_generation_args
     })
     solver = get_registered_class(parser.class_solver, "solver").from_config({
         "successor_generator": successor_generator,
         "state_evaluator": state_evaluator,
-        "steps": parser.steps
+        "steps": parser.steps,
+        "model": model,
     })
     
     initial_state = State("1 2 4 6")

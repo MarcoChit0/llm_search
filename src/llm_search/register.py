@@ -6,6 +6,8 @@ MODEL_REGISTRY = {}
 STATE_EVALUATOR_REGISTRY = {}
 SUCCESSOR_GENERATOR_REGISTRY = {}
 SOLVER_REGISTRY = {}
+GOAL_CHECKER_REGISTRY = {}
+
 REGISTRIES = {
     "model": MODEL_REGISTRY,
     "state_evaluator": STATE_EVALUATOR_REGISTRY,
@@ -42,11 +44,14 @@ class Register(abc.ABC):
         self.__dict__.update(kwargs)
 
     @classmethod
-    def from_config(cls, config: dict) -> Register:
+    def from_config(cls:Register, config: dict) -> Register:
         print(f"Derived cls name: {cls.__name__}")
         signature = inspect.signature(cls.__init__)
-        valid_params = list(signature.parameters.keys())[1:]  # Skip 'self'
-        
+        print(f"Signature: {signature}")    
+        print(f"Parameters: {signature.parameters}")
+        valid_params = [param for param in signature.parameters if param != "self" and param != "kwargs"]
+        print(f"Valid params: {valid_params}")
+
         # Check if **kwargs is present
         has_kwargs = any(param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values())
 

@@ -30,50 +30,38 @@ class SuccessorGenerator(Register):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def generate_successor(self, state: State, action: str) -> State:
+    def apply(self, state: State, action: str) -> State:
         raise NotImplementedError
 
     def generate_successors(self, state: State) -> List[State]:
         avaialble_actions = self.get_available_actions(state)
         successors = []
         for action in avaialble_actions:
-            successor = self.generate_successor(state, action)
+            successor = self.apply(state, action)
             successors.append(successor)
         return successors
 
-class ModelBasedSuccessorGenerator(SuccessorGenerator):
-    def __init__(self, model:Model, text_generation_args:dict, **kwargs):
-        self._model = model
-        self._text_generation_args = text_generation_args
-        super().__init__(**kwargs)
-    
+
+
+class ProposeModelBasedSuccessorGenerator(SuccessorGenerator, ModelBasedClass):
+
     def get_actions(self, state:State) -> list[str]:
-        response = self._model.generate_text(self.get_actions_generation_prompt(state), **self._text_generation_args)
-        actions = self.parse_actions_generation_response_into_actions(response)
+        response = self._model.generate_text(self.get_prompt(state), **self._text_generation_args)
+        print(response)
+        actions = []
+        for r in response:
+            actions.extend(r.split('\n'))
         return actions
 
-    def generate_successor(self, state: State, action: str) -> State:
-        data = self.parse_action_into_data(action)
-        return State(data, state, action)
-
-    @abc.abstractmethod
-    def parse_actions_generation_response_into_actions(self, response:list[str]) -> list[str] | str:
-        raise NotImplementedError
-    
-    @abc.abstractmethod
-    def parse_action_into_data(self, action:str) -> str:
-        raise NotImplementedError
-
-
-class ProposeModelBasedSuccessorGenerator(ModelBasedSuccessorGenerator):
-    def __init__(self, model, text_generation_args, **kwargs):
-        super().__init__(model, text_generation_args, **kwargs)
+    def apply(self, state: State, action: str) -> State:
+        successor_data = action.split('left: ')[1].replace(')', '').strip()
+        return State(successor_data, state, action)
 
     @classmethod
     def get_entries(cls) -> list[str]:
         return ["propose"]
 
-    def get_actions_generation_prompt(self, state:State) -> str:
+    def get_prompt(self, state:State) -> str:
         propose_prompt = """Given a list of numbers, propose possible next steps using basic arithmetic operations: addition (+), subtraction (-), multiplication (*), and division (/). Each step must involve exactly two numbers from the list, and the result should replace those two numbers in a new list.
 
 Rules:
@@ -101,17 +89,8 @@ Input: {input}
 Possible next steps:"""
         return propose_prompt.format(input=state._data)
     
-    def parse_actions_generation_response_into_actions(self, response: list[str]) -> list[str]:
-        actions = []
-        for r in response:
-            actions.extend(r.split('\n'))
-        return actions
-    
     def is_available_action(self, action:str) -> bool:
         return re.match(
             r'^\s*\d+(?:\.\d+)?\s*[\+\-\/\*]\s*\d+(?:\.\d+)?\s*=\s*\d+(?:\.\d+)?\s*\(left:\s*(?:\d+(?:\.\d+)?(?:\s+\d+(?:\.\d+)?)*?)\)\s*$',
             action
         )
-
-    def parse_action_into_data(self, action:str) -> str:
-        return action.split('left: ')[1].replace(')', '').strip()

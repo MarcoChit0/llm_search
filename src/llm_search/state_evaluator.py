@@ -1,5 +1,5 @@
 from llm_search.state import *
-from llm_search.models import Model
+from llm_search.models import *
 from llm_search.register import *
 import numpy as np
 import abc
@@ -11,18 +11,8 @@ class StateEvaluator(Register):
     def evaluate_state_batch(self, state_batch: list[State]) -> None:
         raise NotImplementedError
 
-class ModelBasedStateEvaluator(StateEvaluator):
-    def __init__(self, model: Model, text_generation_args: dict, **kwargs):
-        self._model: Model = model
-        self._text_generation_args:dict = text_generation_args
-        super().__init__(**kwargs)
-    
-    @abc.abstractmethod
-    def get_evaluation_prompt(self, state:State) -> str:
-        raise NotImplementedError
-
-class VoteModelBasedStateEvaluator(ModelBasedStateEvaluator):
-    def get_evaluation_prompt(self, state:State) -> str: 
+class VoteModelBasedStateEvaluator(StateEvaluator, ModelBasedClass):
+    def get_prompt(self, state: State) -> str: 
         vote_prompt = """Given a list of candidate steps, select the best one to move toward the target number 24 using basic arithmetic operations: addition (+), subtraction (-), multiplication (*), and division (/).  
 
 Rules:  
@@ -52,6 +42,7 @@ Vote:"""
     '''
     The successor state whose action is the most voted by the model receives a value of 0. The remaining states maintain ther values as infinity.
     '''
+
     def evaluate_state_batch(self, state_batch:list[State]) -> None:
         parent_state:State = state_batch[0]._parent
         if parent_state is None:

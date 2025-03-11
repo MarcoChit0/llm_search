@@ -3,27 +3,33 @@ import torch
 import os
 import abc
 from llm_search.register import *
+from llm_search.state import State
 
 class Model(Register):
     registry = MODEL_REGISTRY
+
+    def __init__(self, model_name:str, **kwargs) -> None:
+        self._model_name = model_name
+        super().__init__(**kwargs)
 
     @abc.abstractmethod
     def generate_text(self, prompt: str, **kwargs) -> list[str]:
         raise NotImplementedError
 
 class HuggingFaceModel(Model):
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        model_path = self.__dict__.get('model_path')
-        model_name = self.__dict__.get('model_name')
-        token = os.getenv('HUGGINGFACE_TOKEN')
+    prefix = None
+    def __init__(self, model_name:str, model_config:dict={}, tokenizer_config:dict={}, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
+        self.model_path = os.path.join(self.prefix, self._model_name)
+        self.model_config = model_config
+        self.tokenizer_config = tokenizer_config
+        self.token = os.getenv('HUGGINGFACE_TOKEN')
         
-        if token is None:
+        if self.token is None:
             raise ValueError("HUGGINGFACE_TOKEN is required.")
-        tokenizer_config:dict = self.__dict__.get('tokenizer_config', {})
-        model_config:dict = self.__dict__.get('model_config', {})
-        self._tokenizer = AutoTokenizer.from_pretrained(f"{model_path}/{model_name}", **tokenizer_config, token=token)
-        self._model = AutoModelForCausalLM.from_pretrained(f"{model_path}/{model_name}", **model_config, token=token)
+        
+        self._tokenizer = AutoTokenizer.from_pretrained(self.model_path, **self.tokenizer_config, token=self.token)
+        self._model = AutoModelForCausalLM.from_pretrained(self.model_path, **self.model_config, token=self.token)
         self._generated_tokens = 0 
 
     def wrap_prompt(self, prompt: str) -> list[dict]:
@@ -46,9 +52,7 @@ class HuggingFaceModel(Model):
         return candidates
 
 class QwenModel(HuggingFaceModel):
-    def __init__(self, **kwargs) -> None:
-        kwargs['model_path'] = 'Qwen'
-        super().__init__(**kwargs)
+    prefix = "Qwen"
     
     @classmethod
     def get_entries(cls) -> list[str]:
@@ -57,14 +61,12 @@ class QwenModel(HuggingFaceModel):
                 "Qwen2.5-3B", "Qwen2.5-3B-Instruct"]
 
 class LlamaModel(HuggingFaceModel):
-    def __init__(self, **kwargs) -> None:
-        kwargs['model_path'] = 'meta-llama'
-        if 'model_config' not in kwargs:
-            kwargs['model_config'] = {"torch_dtype": torch.bfloat16}
-        else:
-            if 'torch_dtype' not in kwargs['model_config']:
-                kwargs['model_config']['torch_dtype'] = torch.bfloat16
-        super().__init__(**kwargs)
+    prefix = "meta-llama"
+
+    def __init__(self, model_name:str, model_config:dict={}, tokenizer_config:dict={}, **kwargs) -> None:
+        if 'torch_dtype' not in model_config:
+            model_config['torch_dtype'] = torch.bfloat16 
+        super().__init__(model_name, model_config, tokenizer_config, **kwargs)
     
     def wrap_prompt(self, prompt):
         return [{'role': 'system', 'content': 'Resolve the problem efficiently and clearly. Provide a concise solution with no explanation.'}] + super().wrap_prompt(prompt)
@@ -80,8 +82,8 @@ class LlamaModel(HuggingFaceModel):
 from google import genai
 from google.genai import types
 class GeminiModel(Model):
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
+    def __init__(self, model_name:str, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
         self.api_key = os.getenv("GEMINI_API_KEY")
         if self.api_key is None:
             raise ValueError("GEMINI_API_KEY environment variable not set")
@@ -95,9 +97,8 @@ class GeminiModel(Model):
         return ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview-02-05", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"]
 
     def generate_text(self, prompt: str, **kwargs) -> list[str]:
-        model_name = self.__dict__.get('model_name')
         generation_args = kwargs.get('generation_args', {})
-        response = self.client.models.generate_content(model=model_name, contents=prompt, config=types.GenerateContentConfig(**generation_args))
+        response = self.client.models.generate_content(model=self._model_name, contents=prompt, config=types.GenerateContentConfig(**generation_args))
         candidates = []
         for candidate in response.candidates:
             candidate_content = ""
@@ -110,3 +111,36 @@ class GeminiModel(Model):
         self.total_tokens += response.usage_metadata.total_token_count
 
         return candidates
+
+def text_generation_args_mapping(cls:Model, config:dict) -> dict:
+    if issubclass(cls, HuggingFaceModel):
+        return {
+                "max_new_tokens": config.get("max_output_tokens"),
+                "num_return_sequences": config.get("candidate_count"),
+                "do_sample": config.get("do_sample"),
+                "temperature": config.get("temperature"),
+                "top_p": config.get("top_p"),
+                "top_k": config.get("top_k"),
+                "stop_strings": config.get("stop_sequences"),
+        }
+    elif issubclass(cls, GeminiModel):
+        return {
+                "max_output_tokens": config.get("max_output_tokens"),
+                "candidate_count": config.get("candidate_count"),
+                "temperature": config.get("temperature"),
+                "top_p": config.get("top_p"),
+                "top_k": config.get("top_k"),
+                "stop_sequences": config.get("stop_sequences"),
+        }
+    else:
+        raise ValueError(f"Unsupported model class {cls.__name__}")
+    
+class ModelBasedClass:
+    def __init__(self, model:Model, text_generation_args:dict, **kwargs):
+        self._model = model
+        self._text_generation_args = text_generation_args
+        super().__init__(**kwargs)
+    
+    @abc.abstractmethod
+    def get_prompt(self, state:State) -> str:
+        raise NotImplementedError
