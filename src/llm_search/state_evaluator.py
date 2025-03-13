@@ -12,6 +12,10 @@ class StateEvaluator(Register):
         raise NotImplementedError
 
 class VoteModelBasedStateEvaluator(StateEvaluator, ModelBasedClass):
+    def __init__(self, model: Model, text_generation_args: dict, **kwargs):
+        ModelBasedClass.__init__(self, model, text_generation_args, **kwargs)
+        StateEvaluator.__init__(self, **kwargs)
+
     def get_prompt(self, state: State) -> str: 
         vote_prompt = """Given a list of candidate steps, select the best one to move toward the target number 24 using basic arithmetic operations: addition (+), subtraction (-), multiplication (*), and division (/).  
 

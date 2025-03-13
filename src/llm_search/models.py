@@ -15,6 +15,10 @@ class Model(Register):
     @abc.abstractmethod
     def generate_text(self, prompt: str, **kwargs) -> list[str]:
         raise NotImplementedError
+    
+    @abc.abstractmethod
+    def tonekize(self, text:str) -> list[int]:
+        raise NotImplementedError
 
 class HuggingFaceModel(Model):
     prefix = None
@@ -50,6 +54,9 @@ class HuggingFaceModel(Model):
             candidates.append(candidate_message)
             self._generated_tokens += len(self._tokenizer.encode(candidate_message))
         return candidates
+
+    def tonekize(self, text:str) -> list[int]:
+        return self._tokenizer.encode(text)
 
 class QwenModel(HuggingFaceModel):
     prefix = "Qwen"
@@ -111,6 +118,11 @@ class GeminiModel(Model):
         self.total_tokens += response.usage_metadata.total_token_count
 
         return candidates
+
+    def tokenize(self, text:str) -> list[int]:
+        # TODO: change this approach when google API provides a way to tokenize text
+        # Currently, get the ASCII code for each character in the text
+        return [ord(c) for c in text]
 
 def text_generation_args_mapping(cls:Model, config:dict) -> dict:
     if issubclass(cls, HuggingFaceModel):

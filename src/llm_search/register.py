@@ -6,16 +6,15 @@ MODEL_REGISTRY = {}
 STATE_EVALUATOR_REGISTRY = {}
 SUCCESSOR_GENERATOR_REGISTRY = {}
 SOLVER_REGISTRY = {}
-GOAL_CHECKER_REGISTRY = {}
 
-REGISTRIES = {
+REGISTRIES:dict[str, dict[str, Register]] = {
     "model": MODEL_REGISTRY,
     "state_evaluator": STATE_EVALUATOR_REGISTRY,
     "successor_generator": SUCCESSOR_GENERATOR_REGISTRY,
     "solver": SOLVER_REGISTRY
 }
 
-def register(registry:dict, cls:Register) -> None:
+def register(registry:dict[str, Register], cls:Register) -> None:
     for entry in cls.get_entries():
         if entry in registry:
             raise ValueError(f"Duplicate entry {entry} in registry.")
@@ -38,19 +37,15 @@ def get_registered_class(name:str, registry_name:str|None=None) -> Register:
     return reg_class
 
 class Register(abc.ABC):
-    registry:dict = None
+    registry:dict[str, Register] | None = None
     
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs:dict[str, object]):
         self.__dict__.update(kwargs)
 
     @classmethod
     def from_config(cls:Register, config: dict) -> Register:
-        print(f"Derived cls name: {cls.__name__}")
         signature = inspect.signature(cls.__init__)
-        print(f"Signature: {signature}")    
-        print(f"Parameters: {signature.parameters}")
         valid_params = [param for param in signature.parameters if param != "self" and param != "kwargs"]
-        print(f"Valid params: {valid_params}")
 
         # Check if **kwargs is present
         has_kwargs = any(param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values())
@@ -66,6 +61,7 @@ class Register(abc.ABC):
         if has_kwargs:
             return cls(**config)
         
+        print(f"Creating class {cls.__name__}")
         return cls(**kwargs)
 
     
