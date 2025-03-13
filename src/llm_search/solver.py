@@ -44,11 +44,12 @@ class DepthFirstSearchSolver(Solver):
         if self.symmetry_level == "none":
             return s1._data == s2._data
         elif self.symmetry_level == "weak":
-            return sorted(s1._data.split()) == sorted(s2._data.split())
+            return sorted(s1._data.split(' ')) == sorted(s2._data.split(' '))
         elif self.symmetry_level in ["medium", "strong"]:
             p_tokens = 0.5 if self.symmetry_level == "strong" else 0.75   
-            tokenized_s1 = sorted(self._sucessor_generator.tokenize(s1._data))
-            tokenized_s2 = sorted(self._sucessor_generator.tokenize(s2._data))
+            assert hasattr(self._sucessor_generator, "_model") and isinstance(self._sucessor_generator._model, Model) and callable(self._sucessor_generator._model.tokenize), "The successor generator does not have a valid _model attribute with a callable tokenize method."
+            tokenized_s1 = sorted(self._sucessor_generator._model.tokenize(s1._data))
+            tokenized_s2 = sorted(self._sucessor_generator._model.tokenize(s2._data))
             # Compute the multiset intersection count using two pointers over the sorted lists
             i = j = common = 0
             while i < len(tokenized_s1) and j < len(tokenized_s2):
@@ -75,10 +76,10 @@ class DepthFirstSearchSolver(Solver):
                 return None
     
         explored_states_by_depth[steps].add(state)
-        print(f"Generating successors for state {state._data}.")
+        print(f"Generating successors for state [{state._data}].")
         successors = self._sucessor_generator.generate_successors(state)
         for action, child in state._children.items():
-            print(f"{state._data} ---[{action}]--> {child._data}")
+            print(f"\t{state._data} ---[{action}]--> {child._data}")
         for succ in successors:
             result = self.dfs(succ, steps - 1, explored_states_by_depth)
             if result is not None:

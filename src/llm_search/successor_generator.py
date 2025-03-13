@@ -51,7 +51,6 @@ class ProposeModelBasedSuccessorGenerator(SuccessorGenerator, ModelBasedClass):
 
     def get_actions(self, state:State) -> list[str]:
         response = self._model.generate_text(self.get_prompt(state), **self._text_generation_args)
-        print(response)
         actions = []
         for r in response:
             actions.extend(r.split('\n'))

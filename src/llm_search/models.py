@@ -17,7 +17,7 @@ class Model(Register):
         raise NotImplementedError
     
     @abc.abstractmethod
-    def tonekize(self, text:str) -> list[int]:
+    def tokenize(self, text:str) -> list[int]:
         raise NotImplementedError
 
 class HuggingFaceModel(Model):
@@ -55,7 +55,7 @@ class HuggingFaceModel(Model):
             self._generated_tokens += len(self._tokenizer.encode(candidate_message))
         return candidates
 
-    def tonekize(self, text:str) -> list[int]:
+    def tokenize(self, text:str) -> list[int]:
         return self._tokenizer.encode(text)
 
 class QwenModel(HuggingFaceModel):

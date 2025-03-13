@@ -60,8 +60,7 @@ class Register(abc.ABC):
         # If **kwargs exists in the constructor, pass all remaining keys in config
         if has_kwargs:
             return cls(**config)
-        
-        print(f"Creating class {cls.__name__}")
+
         return cls(**kwargs)
 
     
