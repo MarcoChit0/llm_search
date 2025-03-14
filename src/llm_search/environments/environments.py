@@ -36,7 +36,7 @@ class Environment:
                         new_l.remove(l[i])
                         new_l.remove(l[j])
                         new_l.append(new_value)
-                        if self.ground_truth(new_l):
+                        if verify_recursively(new_l):
                             return True
             return False
         
