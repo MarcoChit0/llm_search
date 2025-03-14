@@ -92,7 +92,7 @@ class DepthFirstSearchSolver(Solver):
             
     def solve(self, initial_state: State) -> State | None:
         states_explored_by_depth = [set() for _ in range(self._steps + 1)]
-        return self.dfs(initial_state, self.steps, states_explored_by_depth, self._budget)
+        return self.dfs(initial_state, self._steps, states_explored_by_depth, self._budget)
 
     @classmethod
     def get_entries(cls) -> list[str]:
