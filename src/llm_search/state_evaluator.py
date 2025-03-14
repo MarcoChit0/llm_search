@@ -51,7 +51,7 @@ Vote:"""
         parent_state:State = state_batch[0]._parent
         if parent_state is None:
             raise ValueError("Missing the argument parent_state for vote evaluation.")
-        voted_states = self._model.generate_text(self.get_evaluation_prompt(parent_state), **self._text_generation_args)
+        voted_states = self._model.generate_text(self.get_prompt(parent_state), **self._text_generation_args)
         states_batch_votes = {action:0 for action in parent_state._children.keys()}
         for voted_state in voted_states:
             if voted_state in states_batch_votes:

@@ -24,7 +24,7 @@ if __name__ == "__main__":
             "quantization_config":BitsAndBytesConfig(load_in_8bit=parser.load_in_8bit),
             "attn_implementation":"flash_attention_2",
             "low_cpu_mem_usage":True, 
-            "device": parser.device},
+            "device_map": parser.device},
         "tokenizer_config": {},
     })
     text_generation_args = {
