@@ -15,6 +15,7 @@ class Parser(tap.Tap):
     temperature: float
     load_in_8bit: bool
     # solver parameters
+    budget: int
     steps: int
     symmetry_level: str
     instance: str | None
@@ -37,6 +38,7 @@ class Parser(tap.Tap):
         self.add_argument("-bis", "--batch_index_start", default=None)
         self.add_argument("-bie", "--batch_index_end", default=None)
         self.add_argument("-d", "--device", choices=["auto", "cuda", "cpu"], default="auto")
+        self.add_argument("-b", "--budget", default=100)
         
     def check_args(self) -> None:
         assert self.instance is not None or (self.batch_index_start is not None and self.batch_index_end is not None), "Either instance or batch_index_start and batch_index_end must be provided."

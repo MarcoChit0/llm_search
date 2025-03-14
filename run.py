@@ -48,16 +48,19 @@ if __name__ == "__main__":
         "state_evaluator": state_evaluator,
         "steps": parser.steps,
         "model": model,
-        "symmetry_level": parser.symmetry_level
+        "symmetry_level": parser.symmetry_level,
+        "budget": parser.budget
     })
 
     experiment_dir = os.path.join("experiments", datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
     os.makedirs(experiment_dir, exist_ok=True)
     results = []  
 
-    def run_experiment(instance_id, initial_state, results):
+    def run_experiment(instance_id, initial_state, results, parser:Parser=parser):
         log_file = os.path.join(experiment_dir, f"instance_{instance_id}.log")
         with open(log_file, "w") as f, redirect_stdout(f):
+            # print input information from parser
+            print(f"Parser arguments: {parser}")
             print(f"Running experiment for instance {instance_id}")
             final_state = solver.solve(initial_state)
             correct = env.is_model_response_correct(initial_state, final_state)
