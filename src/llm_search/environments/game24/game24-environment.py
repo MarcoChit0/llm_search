@@ -1,15 +1,12 @@
-from llm_search.state import State
-import re
-from collections import Counter
-import pandas as pd
+from llm_search.environments.environment import *
 
-class Environment:
+class Game24Environment(Environment):
     def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-        self._path = "src/llm_search/environments/data.csv"
+        super().__init__(**kwargs)
+        self._data_file_path = "src/llm_search/environments/game24/data.csv"
     
     def get_task(self, index:int) -> State:
-        df = pd.read_csv(self._path)
+        df = pd.read_csv(self._data_file_path)
         return State(df.iloc[index]["Puzzles"])
   
     def ground_truth(self,initial_state:State):
