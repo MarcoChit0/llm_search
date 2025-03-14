@@ -10,6 +10,7 @@ import argcomplete
 import os
 import datetime
 from contextlib import redirect_stdout
+from transformers import BitsAndBytesConfig
 
 if __name__ == "__main__":
     parser = Parser()
@@ -19,7 +20,7 @@ if __name__ == "__main__":
 
     model = get_registered_class(parser.class_model, "model").from_config({
         "model_name": parser.class_model,
-        "model_config": {"load_in_8bit": parser.load_in_8bit},
+        "model_config": {"quantization_config":BitsAndBytesConfig(load_in_8bit=True)},
         "tokenizer_config": {},
     })
     text_generation_args = {
