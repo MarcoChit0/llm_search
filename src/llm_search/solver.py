@@ -39,6 +39,7 @@ class DepthFirstSearchSolver(Solver):
         self._steps = steps
         self._symmetry_level = symmetry_level
         self._budget = budget
+        self._current_budget = budget
 
         super().__init__(successor_generator, state_evaluator, **kwargs)
 
@@ -68,8 +69,8 @@ class DepthFirstSearchSolver(Solver):
             raise ValueError(f"Invalid value for symmetry_level: {self._symmetry_level}")
 
     def dfs(self, state: State, steps: int, explored_states_by_depth: list[set[State]]) -> State | None:
-        print(f"dfs([data:{state._data}, steps:{steps}, budget:{self._budget}])")
-        if steps == 0 or self._budget == 0:
+        print(f"dfs([data:{state._data}, steps:{steps}, budget:{self._current_budget }])")
+        if steps == 0 or self._current_budget  == 0:
             return state if state._data == "24" else None
 
         for explored_state in explored_states_by_depth[steps]:
@@ -81,7 +82,7 @@ class DepthFirstSearchSolver(Solver):
         print(f"Generating successors for state [{state._data}].")
         
         successors = self._sucessor_generator.generate_successors(state)
-        self._budget -= 1
+        self._current_budget  -= 1
         for action, child in state._children.items():
             print(f"\t{state._data} ---[{action}]--> {child._data}")
         for succ in successors:
@@ -92,6 +93,7 @@ class DepthFirstSearchSolver(Solver):
             
     def solve(self, initial_state: State) -> State | None:
         states_explored_by_depth = [set() for _ in range(self._steps + 1)]
+        self._current_budget = self._budget
         return self.dfs(initial_state, self._steps, states_explored_by_depth)
 
     @classmethod
