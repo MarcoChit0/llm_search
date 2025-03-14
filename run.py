@@ -20,7 +20,10 @@ if __name__ == "__main__":
 
     model = get_registered_class(parser.class_model, "model").from_config({
         "model_name": parser.class_model,
-        "model_config": {"quantization_config":BitsAndBytesConfig(load_in_8bit=True)},
+        "model_config": {
+            "quantization_config":BitsAndBytesConfig(load_in_8bit=True),
+            "use_swa":False,
+            "low_cpu_mem_usage":True},
         "tokenizer_config": {},
     })
     text_generation_args = {

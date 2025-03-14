@@ -2,6 +2,7 @@ import tap
 from llm_search.register import get_available_entries
 
 class Parser(tap.Tap):
+    device:str
     # registries
     class_model: str
     class_successor_generator: str
@@ -35,6 +36,7 @@ class Parser(tap.Tap):
         self.add_argument("-i", "--instance", default=None)
         self.add_argument("-bis", "--batch_index_start", default=None)
         self.add_argument("-bie", "--batch_index_end", default=None)
+        self.add_argument("-d", "--device", choices=["auto", "cuda", "cpu"], default="auto")
         
     def check_args(self) -> None:
         assert self.instance is not None or (self.batch_index_start is not None and self.batch_index_end is not None), "Either instance or batch_index_start and batch_index_end must be provided."
