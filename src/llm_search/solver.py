@@ -67,9 +67,9 @@ class DepthFirstSearchSolver(Solver):
         else:
             raise ValueError(f"Invalid value for symmetry_level: {self._symmetry_level}")
 
-    def dfs(self, state: State, steps: int, explored_states_by_depth: list[set[State]], budget:int) -> State | None:
-        print(f"dfs([data:{state._data}, steps:{steps}, budget:{budget}])")
-        if steps == 0 or budget == 0:
+    def dfs(self, state: State, steps: int, explored_states_by_depth: list[set[State]]) -> State | None:
+        print(f"dfs([data:{state._data}, steps:{steps}, budget:{self._budget}])")
+        if steps == 0 or self._budget == 0:
             return state if state._data == "24" else None
 
         for explored_state in explored_states_by_depth[steps]:
@@ -81,18 +81,18 @@ class DepthFirstSearchSolver(Solver):
         print(f"Generating successors for state [{state._data}].")
         
         successors = self._sucessor_generator.generate_successors(state)
-        budget -= 1
+        self._budget -= 1
         for action, child in state._children.items():
             print(f"\t{state._data} ---[{action}]--> {child._data}")
         for succ in successors:
-            result = self.dfs(succ, steps - 1, explored_states_by_depth, budget)
+            result = self.dfs(succ, steps - 1, explored_states_by_depth)
             if result is not None:
                 return result
         return None
             
     def solve(self, initial_state: State) -> State | None:
         states_explored_by_depth = [set() for _ in range(self._steps + 1)]
-        return self.dfs(initial_state, self._steps, states_explored_by_depth, self._budget)
+        return self.dfs(initial_state, self._steps, states_explored_by_depth)
 
     @classmethod
     def get_entries(cls) -> list[str]:
