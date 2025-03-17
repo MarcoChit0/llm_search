@@ -33,7 +33,7 @@ if __name__ == "__main__":
         "model": model,
         "text_generation_args": text_generation_args
     })
-    env = Game24Environment(model)
+    env = Game24Environment(model, successor_generator= "propose-all")
     solver = get_registered_class(parser.class_solver, "solver").from_config({
         "environment": env,
         "state_evaluator": state_evaluator,

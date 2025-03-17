@@ -33,11 +33,11 @@ class Game24Environment(Environment):
                         new_l.remove(l[i])
                         new_l.remove(l[j])
                         new_l.append(new_value)
-                        if self.ground_truth(new_l):
+                        if verify_recursively(new_l):
                             return True
             return False
         
-        return verify_recursively(list(map(int, initial_state._data.split())))
+        return verify_recursively(list(map(int, initial_state._data.split(' '))))
 
 
     def is_model_response_correct(self, initial_state: State, final_state: State | None):
@@ -114,7 +114,7 @@ class Game24Environment(Environment):
 
         return True
     
-    def wrap_successor_generator_prompt(self) -> str:
+    def wrap_successor_generator_prompt(self, state) -> str:
         successor_generator = self.__dict__.get("successor_generator")
         if  successor_generator == "propose":
             return """Given a list of numbers, propose possible next steps using basic arithmetic operations: addition (+), subtraction (-), multiplication (*), and division (/). Each step must involve exactly two numbers from the list, and the result should replace those two numbers in a new list.
@@ -141,9 +141,9 @@ Possible next steps:
 Now, generate the possible next steps for the following input:
 
 Input: {input}
-Possible next steps:"""
+Possible next steps:""".format(input=state._data)
         elif successor_generator == "propose-all":
-            """Given a list of numbers, propose all possible next steps using basic arithmetic operations: addition (+), subtraction (-), multiplication (*), and division (/). Each step must involve exactly two numbers from the list, and the result should replace those two numbers in a new list.
+            return """Given a list of numbers, propose all possible next steps using basic arithmetic operations: addition (+), subtraction (-), multiplication (*), and division (/). Each step must involve exactly two numbers from the list, and the result should replace those two numbers in a new list.
 
 Rules:
 - Only use basic arithmetic operations.
@@ -183,7 +183,7 @@ All possible next steps:
 Now, generate all the possible next steps for the following input:
 
 Input: {input}
-All possible next steps:"""
+All possible next steps:""".format(input=state._data, candidate_steps='\n'.join(list(state._children.keys())))
         else:
             raise ValueError(f"Invalid successor generator: {successor_generator}")
         
@@ -204,9 +204,14 @@ All possible next steps:"""
             raise ValueError(f"Invalid successor generator: {successor_generator}")
     
     def get_actions(self, state):
+        print('----------')
+        print(state)
+        print(state._data)
         successor_generator = self.__dict__.get("successor_generator")
         if successor_generator in ["propose", "propose-all"]:
-            response = self._model.generate_text()
+            prompt = self.wrap_successor_generator_prompt(state)
+            print(prompt)
+            response = self._model.generate_text(prompt)
             actions = []
             for r in response:
                 actions.extend(r.split('\n'))

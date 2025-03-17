@@ -1,0 +1,3 @@
+Running experiment for instance new[1 2 4 6]
+dfs(1 2 4 6, 3)
+Generating successors for state [1 2 4 6].
