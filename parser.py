@@ -4,7 +4,6 @@ from llm_search.register import get_available_entries
 class Parser(tap.Tap):
     # registries
     class_model: str
-    class_successor_generator: str
     class_state_evaluator:str
     class_solver:str
     # generation parameters
@@ -22,7 +21,6 @@ class Parser(tap.Tap):
 
     def configure(self) -> None:
         self.add_argument("-cm", "--class_model", choices=get_available_entries("model"), default="Qwen2.5-3B-Instruct")
-        self.add_argument("-csg", "--class_successor_generator", choices=get_available_entries("successor_generator"), default="propose")
         self.add_argument("-cse", "--class_state_evaluator", choices=get_available_entries("state_evaluator"), default="vote")
         self.add_argument("-cs", "--class_solver", choices=get_available_entries("solver"), default="beam-search")
         self.add_argument("-t", "--max_output_tokens", default=1000)

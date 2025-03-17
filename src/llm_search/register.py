@@ -4,13 +4,13 @@ import abc
 
 MODEL_REGISTRY = {}
 STATE_EVALUATOR_REGISTRY = {}
-SUCCESSOR_GENERATOR_REGISTRY = {}
+ENVIRONMENT_REGISTRY = {}
 SOLVER_REGISTRY = {}
 
 REGISTRIES:dict[str, dict[str, Register]] = {
     "model": MODEL_REGISTRY,
     "state_evaluator": STATE_EVALUATOR_REGISTRY,
-    "successor_generator": SUCCESSOR_GENERATOR_REGISTRY,
+    "environment": ENVIRONMENT_REGISTRY,
     "solver": SOLVER_REGISTRY
 }
 

@@ -1,6 +1,6 @@
 import numpy as np
 from llm_search.models import *
-from llm_search.successor_generator import *
+from llm_search.environments.environment import *
 from llm_search.state import State
 from llm_search.state_evaluator import *
 from llm_search.register import *
@@ -8,8 +8,8 @@ import heapq
 
 class Solver(Register):
     registry = SOLVER_REGISTRY
-    def __init__(self, successor_generator:SuccessorGenerator, state_evaluator:StateEvaluator, **kwargs):
-        self._sucessor_generator = successor_generator
+    def __init__(self, environment:Environment, state_evaluator:StateEvaluator, **kwargs):
+        self._environment = environment
         self._state_evaluator = state_evaluator
         super().__init__(**kwargs)
 
@@ -24,7 +24,7 @@ class BeamSearchSolver(Solver):
         heapq.heapify(states)
         for i in range(steps):
             s = heapq.heappop(states)
-            successors = self._sucessor_generator.generate_successors(s)
+            successors = self._environment.expand(s)
             self._state_evaluator.evaluate_state_batch(successors)
             for succ in successors:
                 heapq.heappush(states, succ)
@@ -35,10 +35,10 @@ class BeamSearchSolver(Solver):
         return ["beam-search"]
     
 class DepthFirstSearchSolver(Solver):
-    def __init__(self, successor_generator:SuccessorGenerator, state_evaluator:StateEvaluator, steps:int, symmetry_level:str, **kwargs):
+    def __init__(self, environment:Environment, state_evaluator:StateEvaluator, steps:int, symmetry_level:str, **kwargs):
         self.steps = steps
         self.symmetry_level = symmetry_level
-        super().__init__(successor_generator, state_evaluator, **kwargs)
+        super().__init__(environment, state_evaluator, **kwargs)
 
     def check_symmetries(self, s1: State, s2: State) -> bool:
         if self.symmetry_level == "none":
@@ -47,9 +47,9 @@ class DepthFirstSearchSolver(Solver):
             return sorted(s1._data.split(' ')) == sorted(s2._data.split(' '))
         elif self.symmetry_level in ["medium", "strong"]:
             p_tokens = 0.5 if self.symmetry_level == "strong" else 0.75   
-            assert hasattr(self._sucessor_generator, "_model") and isinstance(self._sucessor_generator._model, Model) and callable(self._sucessor_generator._model.tokenize), "The successor generator does not have a valid _model attribute with a callable tokenize method."
-            tokenized_s1 = sorted(self._sucessor_generator._model.tokenize(s1._data))
-            tokenized_s2 = sorted(self._sucessor_generator._model.tokenize(s2._data))
+            assert hasattr(self._environment, "_model") and isinstance(self._environment._model, Model) and callable(self._environment._model.tokenize), "The successor generator does not have a valid _model attribute with a callable tokenize method."
+            tokenized_s1 = sorted(self._environment._model.tokenize(s1._data))
+            tokenized_s2 = sorted(self._environment._model.tokenize(s2._data))
             # Compute the multiset intersection count using two pointers over the sorted lists
             i = j = common = 0
             while i < len(tokenized_s1) and j < len(tokenized_s2):
@@ -77,7 +77,7 @@ class DepthFirstSearchSolver(Solver):
     
         explored_states_by_depth[steps].add(state)
         print(f"Generating successors for state [{state._data}].")
-        successors = self._sucessor_generator.generate_successors(state)
+        successors = self._environment.expand(state)
         for action, child in state._children.items():
             print(f"\t{state._data} ---[{action}]--> {child._data}")
         for succ in successors:

@@ -2,9 +2,8 @@ from parser import Parser
 from llm_search.solver import *
 from llm_search.state import *
 from llm_search.state_evaluator import *
-from llm_search.successor_generator import *
 from llm_search.models import *
-from llm_search.environments.environments import *
+from llm_search.environments.game24.environment import *
 import pandas as pd
 import argcomplete     
 import os
@@ -17,29 +16,26 @@ if __name__ == "__main__":
     parser.parse_args()
     parser.check_args()
 
-    model = get_registered_class(parser.class_model, "model").from_config({
-        "model_name": parser.class_model,
-        "model_config": {"load_in_8bit": parser.load_in_8bit},
-        "tokenizer_config": {},
-    })
     text_generation_args = {
         "max_output_tokens": parser.max_output_tokens,
         "candidate_count": parser.candidate_count,
         "do_sample": parser.do_sample,
         "temperature": parser.temperature,
     }
-    text_generation_args = text_generation_args_mapping(type(model), text_generation_args)
-
-    successor_generator = get_registered_class(parser.class_successor_generator, "successor_generator").from_config({
-        "model": model,
-        "text_generation_args": text_generation_args
+    model = get_registered_class(parser.class_model, "model").from_config({
+        "model_name": parser.class_model,
+        "model_config": {"load_in_8bit": parser.load_in_8bit},
+        "tokenizer_config": {},
+        "text_generation_args": text_generation_args,
     })
+
     state_evaluator = get_registered_class(parser.class_state_evaluator, "state_evaluator").from_config({
         "model": model,
         "text_generation_args": text_generation_args
     })
+    env = Game24Environment(model)
     solver = get_registered_class(parser.class_solver, "solver").from_config({
-        "successor_generator": successor_generator,
+        "environment": env,
         "state_evaluator": state_evaluator,
         "steps": parser.steps,
         "model": model,
@@ -61,7 +57,6 @@ if __name__ == "__main__":
             "Result": "Correct" if correct else "Incorrect" 
         })
 
-    env = Environment()
     if parser.instance is not None:
         initial_state = State(parser.instance)
         run_experiment(f"new[{initial_state._data}]", initial_state, results)
