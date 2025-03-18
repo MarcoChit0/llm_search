@@ -1,9 +1,10 @@
 from llm_search.environments.environment import *
+import os
 
 class Game24Environment(Environment):
     def __init__(self, model, **kwargs):
         super().__init__(model, **kwargs)
-        self._data_file_path = "src/llm_search/environments/game24/data.csv"
+        self._data_file_path = os.path.join(os.path.dirname(__file__), "data.csv")
     
     def get_task(self, index:int) -> State:
         df = pd.read_csv(self._data_file_path)
@@ -187,14 +188,6 @@ All possible next steps:""".format(input=state._data, candidate_steps='\n'.join(
         else:
             raise ValueError(f"Invalid successor generator: {successor_generator}")
         
-    def is_available_action(self, action:str) -> bool:
-        successor_generator = self.__dict__.get("successor_generator")
-        if successor_generator in ['propose', 'propose-all']:
-            return re.match(
-                r'^\s*\d+(?:\.\d+)?\s*[\+\-\/\*]\s*\d+(?:\.\d+)?\s*=\s*\d+(?:\.\d+)?\s*\(left:\s*(?:\d+(?:\.\d+)?(?:\s+\d+(?:\.\d+)?)*?)\)\s*$',
-                action
-            )
-    
     def apply_action(self, state, action):
         successor_generator = self.__dict__.get("successor_generator")
         if successor_generator in ['propose', 'propose-all']:
@@ -203,22 +196,75 @@ All possible next steps:""".format(input=state._data, candidate_steps='\n'.join(
         else:
             raise ValueError(f"Invalid successor generator: {successor_generator}")
     
-    def get_actions(self, state):
-        print('----------')
-        print(state)
-        print(state._data)
-        successor_generator = self.__dict__.get("successor_generator")
-        if successor_generator in ["propose", "propose-all"]:
-            prompt = self.wrap_successor_generator_prompt(state)
-            print(prompt)
+    def get_available_actions(self, state):
+        if state not in self._available_actions:
+            successor_generator = self.__dict__.get("successor_generator")
+            ACTION_PATTERN = r'^\s*\d+(?:\.\d+)?\s*[\+\-\/\*]\s*\d+(?:\.\d+)?\s*=\s*\d+(?:\.\d+)?\s*\(left:\s*(?:\d+(?:\.\d+)?(?:\s+\d+(?:\.\d+)?)*?)\)\s*$'
+            if successor_generator in ["propose", "propose-all"]:
+                prompt = self.wrap_successor_generator_prompt(state)
+                print(prompt)
+            else:
+                raise ValueError(f"Invalid successor generator: {successor_generator}")
+            
             response = self._model.generate_text(prompt)
             actions = []
-            for r in response:
-                actions.extend(r.split('\n'))
-            return actions
-        else:
-            raise ValueError(f"Invalid successor generator: {successor_generator}")
+            for r in response: 
+                for a in r.split('\n'):
+                    if re.match(ACTION_PATTERN, a):
+                        actions.append(a)
+            self._available_actions[state] = actions
+        return self._available_actions[state]
     
     @classmethod
     def get_entries(cls) -> list[str]:
-        return ["24-game"]
+        return ["24-game", "game24"]
+
+    def wrap_state_evaluation_prompt(self, state):
+        state_evaluator = self.__dict__.get("state_evaluator")
+        if state_evaluator == "vote":
+            return """Given a list of candidate steps, select the best one to move toward the target number 24 using basic arithmetic operations: addition (+), subtraction (-), multiplication (*), and division (/).  
+
+Rules:  
+- Choose only one candidate step.  
+- The response must contain **only** the selected step.  
+
+Example:  
+
+Input:  2 8 8 14  
+Candidate steps:  
+8 - 2 = 6 (left: 6 8 14)
+14 - 8 = 6 (left: 2 6 8)
+14 / 2 = 7 (left: 7 8 8)
+14 - 2 = 12 (left: 8 8 12)
+
+Vote: 14 - 8 = 6 (left: 2 6 8)  
+
+Now, select the best step for the following input:  
+
+Input: {input}  
+Candidate steps:  
+{candidate_steps}  
+
+Vote:""".format(input=state._data, candidate_steps='\n'.join(list(state._children.keys())))
+        else:
+            raise ValueError(f"Invalid state evaluator: {state_evaluator}")
+    
+    def evaluate(self, x: State | list[State]) -> None:
+        state_evaluator = self.__dict__.get("state_evaluator")
+        print(x)
+        if state_evaluator == "vote":
+            assert isinstance(x, list) and len(x) > 1, "Invalid input for vote evaluation."
+            parent_state:State = x[0]._parent
+            if parent_state is None:
+                raise ValueError("Missing the argument parent_state for vote evaluation.")
+            voted_states = self._model.generate_text(self.wrap_state_evaluation_prompt(parent_state))
+            states_batch_votes = {action:0 for action in parent_state._children.keys()}
+            for voted_state in voted_states:
+                if voted_state in states_batch_votes:
+                    states_batch_votes[voted_state] += 1
+            max_votes = max(states_batch_votes.values())
+            best_actions = [action for action, votes in states_batch_votes.items() if votes == max_votes]
+            best_action = np.random.choice(best_actions)
+            parent_state._children[best_action]._value = 0
+        else:
+            raise ValueError(f"Invalid state evaluator: {state_evaluator}")

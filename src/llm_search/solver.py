@@ -2,15 +2,13 @@ import numpy as np
 from llm_search.models import *
 from llm_search.environments.environment import *
 from llm_search.state import State
-from llm_search.state_evaluator import *
 from llm_search.register import *
 import heapq
 
 class Solver(Register):
     registry = SOLVER_REGISTRY
-    def __init__(self, environment:Environment, state_evaluator:StateEvaluator, **kwargs):
+    def __init__(self, environment:Environment, **kwargs):
         self._environment = environment
-        self._state_evaluator = state_evaluator
         super().__init__(**kwargs)
 
     @abc.abstractmethod
@@ -24,8 +22,13 @@ class BeamSearchSolver(Solver):
         heapq.heapify(states)
         for i in range(steps):
             s = heapq.heappop(states)
-            successors = self._environment.expand(s)
-            self._state_evaluator.evaluate_state_batch(successors)
+            print(f"Step {i}: {s._data}")
+            successors:list[State] = []
+            for a in self._environment.get_available_actions(s):
+                succ = self._environment.apply_action(s, a)
+                successors.append(succ)
+                print(f"{s._data} ---[{a}]--> {succ._data}")
+            self._environment.evaluate(successors)
             for succ in successors:
                 heapq.heappush(states, succ)
         return heapq.heappop(states)
@@ -35,10 +38,10 @@ class BeamSearchSolver(Solver):
         return ["beam-search"]
     
 class DepthFirstSearchSolver(Solver):
-    def __init__(self, environment:Environment, state_evaluator:StateEvaluator, steps:int, symmetry_level:str, **kwargs):
+    def __init__(self, environment:Environment, steps:int, symmetry_level:str, **kwargs):
         self.steps = steps
         self.symmetry_level = symmetry_level
-        super().__init__(environment, state_evaluator, **kwargs)
+        super().__init__(environment, **kwargs)
 
     def check_symmetries(self, s1: State, s2: State) -> bool:
         if self.symmetry_level == "none":
@@ -76,11 +79,11 @@ class DepthFirstSearchSolver(Solver):
                 return None
     
         explored_states_by_depth[steps].add(state)
-        print(f"Generating successors for state [{state._data}].")
-        successors = self._environment.expand(state)
-        for action, child in state._children.items():
-            print(f"\t{state._data} ---[{action}]--> {child._data}")
-        for succ in successors:
+        print(f"Getting applicable actions for state: [{state._data}].")
+        print(f"Available actions: {self._environment.get_available_actions(state)}")
+        for action in self._environment.get_available_actions(state):
+            succ = self._environment.apply_action(state, action)
+            print(f"\t{state._data} ---[{action}]--> {succ._data}")
             result = self.dfs(succ, steps - 1, explored_states_by_depth)
             if result is not None:
                 return result

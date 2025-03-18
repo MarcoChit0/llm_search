@@ -1,7 +1,6 @@
 from parser import Parser
 from llm_search.solver import *
 from llm_search.state import *
-from llm_search.state_evaluator import *
 from llm_search.models import *
 from llm_search.environments.game24.environment import *
 import pandas as pd
@@ -22,21 +21,20 @@ if __name__ == "__main__":
         "do_sample": parser.do_sample,
         "temperature": parser.temperature,
     }
-    model = get_registered_class(parser.class_model, "model").from_config({
-        "model_name": parser.class_model,
+    model = get_registered_class(parser.model, "model").from_config({
+        "model_name": parser.model,
         "model_config": {"load_in_8bit": parser.load_in_8bit},
         "tokenizer_config": {},
         "text_generation_args": text_generation_args,
     })
-
-    state_evaluator = get_registered_class(parser.class_state_evaluator, "state_evaluator").from_config({
+    env = get_registered_class(parser.environment, "environment").from_config({
         "model": model,
-        "text_generation_args": text_generation_args
+        "successor_generator": parser.successor_generator,
+        "state_evaluator": parser.state_evaluator
+        
     })
-    env = Game24Environment(model, successor_generator= "propose-all")
-    solver = get_registered_class(parser.class_solver, "solver").from_config({
+    solver = get_registered_class(parser.solver, "solver").from_config({
         "environment": env,
-        "state_evaluator": state_evaluator,
         "steps": parser.steps,
         "model": model,
         "symmetry_level": parser.symmetry_level
