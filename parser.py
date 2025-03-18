@@ -21,6 +21,7 @@ class Parser(tap.Tap):
     # solver parameters
     steps: int
     symmetry_level: str
+    budget: int
     instance: str | None
     batch_index_start: int | None
     batch_index_end: int | None
@@ -36,6 +37,7 @@ class Parser(tap.Tap):
         self.add_argument("-temp", "--temperature", default=0.7)
         self.add_argument("-l", "--load_in_8bit", default=True, action="store_false")
         
+        self.add_argument("-b", "--budget", default=float("inf"))
         self.add_argument("--steps", default=3)
         self.add_argument("-sl", "--symmetry_level", choices=["none", "medium", "weak", "strong"] , default="weak")
         self.add_argument("-i", "--instance", default=None)

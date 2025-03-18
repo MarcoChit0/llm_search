@@ -11,16 +11,11 @@ class Environment(Register):
     def __init__(self, model, **kwargs):
         self.__dict__.update(kwargs)
         self._model = model
-        self._available_actions:dict[State, list[str]] = {}
         
     @abc.abstractmethod
-    def get_available_actions(self, state:State) -> list[str]:
+    def expand (self, state: State) -> list[State]:
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def apply_action(self, state:State, action:str) -> State:
-        raise NotImplementedError
-    
     @abc.abstractmethod
     def get_task(self, index:int) -> State:
         raise NotImplementedError
@@ -30,5 +25,9 @@ class Environment(Register):
         raise NotImplementedError
     
     @abc.abstractmethod
-    def evaluate(self, x: State | list[State]) -> None:
+    def evaluate(self, states: list[State]) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def is_goal_state(self, state: State) -> bool:
         raise NotImplementedError

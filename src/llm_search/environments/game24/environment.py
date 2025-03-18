@@ -2,8 +2,18 @@ from llm_search.environments.environment import *
 import os
 
 class Game24Environment(Environment):
+    '''
+    state._data :   str
+                    "n1 ... ni", i <= 4
+                    the numbers to be used in the 24 game
+    action:
+                    str
+                    "nj operation nk = result (left: updated list)", 1 <= j, k <= i, operation in ['+', '-', '*', '/'] 
+                    the operation to be applied to the numbers, and the updated list
+    '''
     def __init__(self, model, **kwargs):
         super().__init__(model, **kwargs)
+        self._available_actions = {}
         self._data_file_path = os.path.join(os.path.dirname(__file__), "data.csv")
     
     def get_task(self, index:int) -> State:
@@ -51,15 +61,13 @@ class Game24Environment(Environment):
 
         final_state.print()
 
-        # Verify that the final state is correct.
         path = []
         curr = final_state
         while curr is not None:
             path.append(curr)
             curr = getattr(curr, "_parent", None)
         path.reverse()
-
-        # Verify each transition in the solution path.
+        
         for i in range(len(path) - 1):
             parent_state = path[i]
             child_state = path[i + 1]
@@ -106,8 +114,7 @@ class Game24Environment(Environment):
             if parent_counter != Counter(child_nums):
                 print("State transition did not result in the expected set of numbers for action: " + action)
                 return False
-
-        # Verify that the final state meets the 24-game win condition.
+    
         final_numbers = list(map(int, path[-1]._data.split()))
         if len(final_numbers) != 1 or final_numbers[0] != 24:
             print("Final state does not equal 24. The solution is invalid.")
@@ -196,6 +203,14 @@ All possible next steps:""".format(input=state._data, candidate_steps='\n'.join(
         else:
             raise ValueError(f"Invalid successor generator: {successor_generator}")
     
+    def expand(self, state):
+        successors = []
+        for action in self.get_available_actions(state):
+            successor = self.apply_action(state, action)
+            successors.append(successor)
+        return successors
+        
+    
     def get_available_actions(self, state):
         if state not in self._available_actions:
             successor_generator = self.__dict__.get("successor_generator")
@@ -249,12 +264,11 @@ Vote:""".format(input=state._data, candidate_steps='\n'.join(list(state._childre
         else:
             raise ValueError(f"Invalid state evaluator: {state_evaluator}")
     
-    def evaluate(self, x: State | list[State]) -> None:
+    def evaluate(self, states: list[State]) -> None:
         state_evaluator = self.__dict__.get("state_evaluator")
-        print(x)
         if state_evaluator == "vote":
-            assert isinstance(x, list) and len(x) > 1, "Invalid input for vote evaluation."
-            parent_state:State = x[0]._parent
+            assert isinstance(states, list) and len(states) > 1, "Invalid input for vote evaluation."
+            parent_state:State = states[0]._parent
             if parent_state is None:
                 raise ValueError("Missing the argument parent_state for vote evaluation.")
             voted_states = self._model.generate_text(self.wrap_state_evaluation_prompt(parent_state))
@@ -268,3 +282,6 @@ Vote:""".format(input=state._data, candidate_steps='\n'.join(list(state._childre
             parent_state._children[best_action]._value = 0
         else:
             raise ValueError(f"Invalid state evaluator: {state_evaluator}")
+        
+    def is_goal_state(self, state: State) -> bool:
+        return state._data == "24"

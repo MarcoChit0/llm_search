@@ -8,6 +8,7 @@ import argcomplete
 import os
 import datetime
 from contextlib import redirect_stdout
+from transformers import BitsAndBytesConfig
 
 if __name__ == "__main__":
     parser = Parser()
@@ -23,9 +24,13 @@ if __name__ == "__main__":
     }
     model = get_registered_class(parser.model, "model").from_config({
         "model_name": parser.model,
-        "model_config": {"load_in_8bit": parser.load_in_8bit},
+        "model_config": {
+            "quantization_config":BitsAndBytesConfig(load_in_8bit=parser.load_in_8bit),
+            "attn_implementation":"flash_attention_2",
+            "low_cpu_mem_usage":True, 
+            "device_map": parser.device},
         "tokenizer_config": {},
-        "text_generation_args": text_generation_args,
+        "text_generation_args": text_generation_args
     })
     env = get_registered_class(parser.environment, "environment").from_config({
         "model": model,
@@ -36,7 +41,7 @@ if __name__ == "__main__":
     solver = get_registered_class(parser.solver, "solver").from_config({
         "environment": env,
         "steps": parser.steps,
-        "model": model,
+        "budget": parser.budget,
         "symmetry_level": parser.symmetry_level
     })
 
