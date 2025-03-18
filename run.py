@@ -16,8 +16,8 @@ if __name__ == "__main__":
     parser.parse_args()
     parser.check_args()
 
-    model = get_registered_class(parser.class_model, "model").from_config({
-        "model_name": parser.class_model,
+    model = get_registered_class(parser.model, "model").from_config({
+        "model_name": parser.model,
         "model_config": {
             "quantization_config":BitsAndBytesConfig(load_in_8bit=parser.load_in_8bit),
             "attn_implementation":"flash_attention_2",

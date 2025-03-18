@@ -1,6 +1,0 @@
-Running experiment for instance new[1 2 4 6]
-dfs(1 2 4 6, 3)
-Generating successors for state [1 2 4 6].
-<llm_search.state.State object at 0x701565e216d0>
-1 2 4 6
-None
