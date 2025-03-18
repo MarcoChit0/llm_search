@@ -3,14 +3,12 @@ import inspect
 import abc
 
 MODEL_REGISTRY = {}
-STATE_EVALUATOR_REGISTRY = {}
-SUCCESSOR_GENERATOR_REGISTRY = {}
+ENVIRONMENT_REGISTRY = {}
 SOLVER_REGISTRY = {}
 
 REGISTRIES:dict[str, dict[str, Register]] = {
     "model": MODEL_REGISTRY,
-    "state_evaluator": STATE_EVALUATOR_REGISTRY,
-    "successor_generator": SUCCESSOR_GENERATOR_REGISTRY,
+    "environment": ENVIRONMENT_REGISTRY,
     "solver": SOLVER_REGISTRY
 }
 
@@ -47,21 +45,12 @@ class Register(abc.ABC):
         signature = inspect.signature(cls.__init__)
         valid_params = [param for param in signature.parameters if param != "self" and param != "kwargs"]
 
-        # Check if **kwargs is present
-        has_kwargs = any(param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values())
-
         # Validate required arguments
         for param in valid_params:
             if signature.parameters[param].default is inspect.Parameter.empty and param not in config:
                 raise ValueError(f"Missing required argument {param}")
-
-        kwargs = {param: config.get(param) for param in valid_params if param in config}
-
-        # If **kwargs exists in the constructor, pass all remaining keys in config
-        if has_kwargs:
-            return cls(**config)
-
-        return cls(**kwargs)
+    
+        return cls(**config)
 
     
     def __init_subclass__(cls, **kwargs):
