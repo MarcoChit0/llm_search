@@ -16,7 +16,8 @@ class Solver(Register):
         raise NotImplementedError
 
 class BeamSearchSolver(Solver):    
-    def solve(self, initial_state:State) -> State:
+    def solve(self) -> State:
+        initial_state = self._environment.get_initial_state()
         steps = self.__dict__.get("steps")
         states = [initial_state]
         heapq.heapify(states)
@@ -35,9 +36,7 @@ class BeamSearchSolver(Solver):
 
 
 def check_symmetries(environment: Environment, symmetry_level: str, s1: State, s2: State) -> bool:
-    if symmetry_level == "none":
-        return s1._data == s2._data
-    elif symmetry_level == "weak":
+    if symmetry_level == "weak":
         return sorted(s1._data.split(' ')) == sorted(s2._data.split(' '))
     elif symmetry_level in ["medium", "strong"]:
         p_tokens = 0.5 if symmetry_level == "strong" else 0.75
@@ -60,44 +59,41 @@ def check_symmetries(environment: Environment, symmetry_level: str, s1: State, s
 
 
 class DepthFirstSearchSolver(Solver):
-    def __init__(self, environment:Environment, **kwargs):
-        super().__init__(environment, **kwargs)
-
-    def dfs(self, state: State):
+    def solve(self) -> State | None:
+        initial_state = self._environment.get_initial_state()
         steps = self.__dict__.get("steps")
         symmetry_level = self.__dict__.get("symmetry_level")
         states_explored_by_depth = [set() for _ in range(self.steps + 1)]
+        explored_states = set()
         budget = self.__dict__.get("budget")
-        stack = [(state, steps)]
+        stack = [(initial_state, steps)]
         while stack:
-            s, step = stack.pop()
-            print(f"dfs(state={s._data}, steps={step}, budget={budget})")
+            state, step = stack.pop()
+            print(f"dfs(state={state._data}, steps={step}, budget={budget})")
             
-            if self._environment.is_goal_state(s): 
-                return s
+            if self._environment.is_goal_state(state): 
+                return state
 
             if step == 0 or budget == 0: 
                 continue
+
+            if state in explored_states:
+                continue
             
-            if any(check_symmetries(self._environment, symmetry_level, s, explored_state)
+            if symmetry_level and any(check_symmetries(self._environment, symmetry_level, state, explored_state)
                 for explored_state in states_explored_by_depth[step]):
-                print(f"Symmetry detected [{symmetry_level}]: {s._data}")
+                print(f"Symmetry detected [{symmetry_level}]: {state._data}")
                 continue
             
             budget -= 1
-            states_explored_by_depth[step].add(s)
-            print(f"Expanding {s._data}")
-            successors = self._environment.expand(s)
+            explored_states.add(state)
+            states_explored_by_depth[step].add(state)
+            print(f"Expanding {state._data}")
+            successors = self._environment.expand(state)
             for succ in successors:
-                print(f"\t{s._data} ---[{s.get_action_to_child(succ)}]--> {succ._data}")
+                print(f"\t{state._data} ---[{state.get_action_to_child(succ)}]--> {succ._data}")
                 stack.append((succ, step - 1))
         return None
-            
-    def solve(self, initial_state: State) -> State | None:
-        steps = self.__dict__.get("steps")
-        self.symmetry_level = self.__dict__.get("symmetry_level")
-        states_explored_by_depth = [set() for _ in range(self.steps + 1)]
-        return self.dfs(initial_state)
 
     @classmethod
     def get_entries(cls) -> list[str]:

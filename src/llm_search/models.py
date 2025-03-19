@@ -5,34 +5,13 @@ import abc
 from llm_search.register import *
 from llm_search.state import State
 
+
 class Model(Register):
     registry = MODEL_REGISTRY
 
     def __init__(self, model_name:str, text_generation_args: dict[str, object] = {}, **kwargs) -> None:
-        if issubclass(self.__class__, HuggingFaceModel):
-            mapped_args = {
-                "max_new_tokens": text_generation_args.get("max_output_tokens"),
-                "num_return_sequences": text_generation_args.get("candidate_count"),
-                "do_sample": text_generation_args.get("do_sample"),
-                "temperature": text_generation_args.get("temperature"),
-                "top_p": text_generation_args.get("top_p"),
-                "top_k": text_generation_args.get("top_k"),
-                "stop_strings": text_generation_args.get("stop_sequences"),
-            }
-        elif issubclass(self.__class__, GeminiModel):
-            mapped_args = {
-                "max_output_tokens": text_generation_args.get("max_output_tokens"),
-                "candidate_count": text_generation_args.get("candidate_count"),
-                "temperature": text_generation_args.get("temperature"),
-                "top_p": text_generation_args.get("top_p"),
-                "top_k": text_generation_args.get("top_k"),
-                "stop_sequences": text_generation_args.get("stop_sequences"),
-            }
-        else:
-            raise ValueError(f"Unsupported model class: {self.__class__.__name__}")
-
         # Store the remapped arguments
-        self._text_generation_args = mapped_args
+        self._text_generation_args = map_text_generation_args(self.__class__, text_generation_args)
         self._model_name = model_name
         super().__init__(**kwargs)
 
@@ -42,6 +21,14 @@ class Model(Register):
     
     @abc.abstractmethod
     def tokenize(self, text:str) -> list[int]:
+        raise NotImplementedError
+    
+    @abc.abstractmethod
+    def reset(self) -> None:
+        raise NotImplementedError
+    
+    @abc.abstractmethod
+    def get_statistics(self) -> dict[str, object]:
         raise NotImplementedError
 
 class HuggingFaceModel(Model):
@@ -60,13 +47,22 @@ class HuggingFaceModel(Model):
         self._model = AutoModelForCausalLM.from_pretrained(self.model_path, **self.model_config, token=self.token)
         self._generated_tokens = 0 
 
+    def reset(self):
+        self._generated_tokens = 0
+    
+    def get_statistics(self) -> dict[str, object]:
+        return {
+            "generated_tokens": self._generated_tokens
+        }
+
     def wrap_prompt(self, prompt: str) -> list[dict]:
         return [{'role': 'user', 'content': prompt}]
 
     def generate_text(self, prompt: str, **kwargs) -> list[str]:
         new_message = self.wrap_prompt(prompt)
-        text_generation_args = self._text_generation_args
-        text_generation_args.update(kwargs)
+        text_generation_args = map_text_generation_args(
+            self.__class__, {**self._text_generation_args, **kwargs}
+        )
         generator = pipeline(
             "text-generation", 
             model=self._model, 
@@ -75,9 +71,12 @@ class HuggingFaceModel(Model):
         response = generator(new_message, **text_generation_args) 
         candidates = []
         for candidate in response:
-            candidate_message = candidate['generated_text'][-1]['content']
-            candidates.append(candidate_message)
-            self._generated_tokens += len(self._tokenizer.encode(candidate_message))
+            candidade_message_parts = candidate['generated_text']
+            candidade_message = ""
+            for candidade_message_part in candidade_message_parts:
+                candidade_message += candidade_message_part['content']
+            candidates.append(candidade_message)
+            self._generated_tokens += len(self._tokenizer.encode(candidade_message))
         return candidates
 
     def tokenize(self, text:str) -> list[int]:
@@ -115,7 +114,7 @@ from google import genai
 from google.genai import types
 class GeminiModel(Model):
     def __init__(self, model_name:str, text_generation_args: dict[str, object] = {},  **kwargs) -> None:
-        super().__init__(model_name, text_generation_args, **kwargs)
+        super().__init__(model_name, text_generation_args, **(kwargs or {}))
         self.api_key = os.getenv("GEMINI_API_KEY")
         if self.api_key is None:
             raise ValueError("GEMINI_API_KEY environment variable not set")
@@ -124,13 +123,24 @@ class GeminiModel(Model):
         self.prompt_tokens = 0
         self.total_tokens = 0
     
+    def reset(self):
+        self.response_tokens = 0
+        self.prompt_tokens = 0
+        self.total_tokens = 0
+    
+    def get_statistics(self) -> dict[str, object]:
+        return {
+            "response_tokens": self.response_tokens,
+            "prompt_tokens": self.prompt_tokens,
+            "total_tokens": self.total_tokens
+        }
+    
     @classmethod
     def get_entries(cls) -> list[str]:
         return ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview-02-05", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"]
 
     def generate_text(self, prompt: str, **kwargs) -> list[str]:
-        text_generation_args = self._text_generation_args
-        text_generation_args.update(kwargs)
+        text_generation_args = map_text_generation_args(self.__class__, {**self._text_generation_args, **kwargs})
         response = self.client.models.generate_content(model=self._model_name, contents=prompt, config=types.GenerateContentConfig(**text_generation_args))
         candidates = []
         for candidate in response.candidates:
@@ -150,6 +160,36 @@ class GeminiModel(Model):
         # Currently, get the ASCII code for each character in the text
         return [ord(c) for c in text]
     
+def map_text_generation_args(model: Model, text_generation_args: dict[str, object]) -> dict[str, object]:
+    new_args = {}
+    if issubclass(model, HuggingFaceModel):
+        mapping = {
+            "max_output_tokens": "max_new_tokens",
+            "candidate_count": "num_return_sequences",
+            "do_sample": "do_sample",
+            "temperature": "temperature",
+            "top_p": "top_p",
+            "top_k": "top_k",
+            "stop_sequences": "stop_strings",
+        }
+    elif issubclass(model, GeminiModel):
+        mapping = {
+            "max_output_tokens": "max_output_tokens",
+            "candidate_count": "candidate_count",
+            "temperature": "temperature",
+            "top_p": "top_p",
+            "top_k": "top_k",
+            "stop_sequences": "stop_sequences",
+        }
+    else:
+        raise ValueError(f"Unsupported model class: {model.__name__}")
+    
+    for input_key, output_key in mapping.items():
+        value = text_generation_args.get(input_key)
+        if value is not None:
+            new_args[output_key] = value
+    return new_args
+
 class ModelBasedClass:
     def __init__(self, model:Model, text_generation_args:dict, **kwargs):
         self._model = model

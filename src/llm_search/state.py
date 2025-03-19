@@ -2,10 +2,12 @@ from __future__ import annotations
 from typing import Dict
 
 class State:
-    def __init__(self, data : str, parent : State | None = None, action: str | None = None):
+    def __init__(self, data : str, parent : State | None = None, action: str | None = None) -> None:
         self._parent = parent
         if self._parent is not None:
             self._parent.add_child(action, self)
+        else:
+            self._is_initial_state = True
         self._data : str = data
         self._value : float = float('inf')
         self._children : Dict[str, State] = {}
