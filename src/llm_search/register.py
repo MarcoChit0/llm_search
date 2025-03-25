@@ -1,6 +1,7 @@
 from __future__ import annotations
 import inspect
 import abc
+import logging
 
 MODEL_REGISTRY = {}
 ENVIRONMENT_REGISTRY = {}
@@ -74,3 +75,9 @@ def get_available_entries(registry:str|dict):
         if registry is None:
             raise ValueError(f"Invalid registry name {registry}.")
     return list(registry.keys())
+
+class ExpectedError(Exception):
+    pass
+
+class CriticalError(Exception):
+    pass

@@ -1,6 +1,5 @@
-from llm_search.state import State
+from llm_search.state import *
 import re
-from collections import Counter
 import pandas as pd
 from llm_search.models import *
 from llm_search.register import *
@@ -19,28 +18,52 @@ class Environment(Register):
         self._model = model
         self._initial_state : State | None = None
         self._task : Task | None = None
+        self._candidate_count : int = kwargs.get("candidate_count", 1)
+        self._budget : int | None = kwargs.get("budget", None)
+        self._used_budget = 0
+        self._log_file = kwargs.get("log_file", None)
+    
+    def generate(self, prompt, **kwargs):
+        if self._budget is not None:
+            if self._used_budget > 0:
+                candidate_count = kwargs.pop("candidate_count", self._candidate_count)
+                candidate_count = min(self._used_budget, candidate_count)
+                response = self._model.generate(prompt, candidate_count=candidate_count, **kwargs)
+                self._used_budget -= candidate_count
+            else:
+                raise ExpectedError("Budget exceeded.")
+        else:
+            response = self._model.generate(prompt, **kwargs)
+        return response
         
     def reset(self):
         self._initial_state = None
         self._task = None
         self._model.reset()
+        self._used_budget = self._budget
     
     def initialize(self, **kwargs) -> None:
+        self._log_file = kwargs.get("log_file", None)
         self.reset()
-        self._initialize(**kwargs)
-        assert self._initial_state is not None, "The initial state was not set."
-        assert self._task is not None, "The task was not set."
+        try:
+            self._initialize(**kwargs)
+        except Exception as e:
+            raise CriticalError(f"Initialize : {e}") from e
+        if self._initial_state is None:
+            raise CriticalError("Initialize : The initial state was not set.")
+        if self._task is None:
+            raise CriticalError("Initialize : The task was not set.")
     
     @abc.abstractmethod
     def _initialize(self, **kwargs) -> None:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def expand (self, state: State) -> list[State]:
+    def expand (self, state: State, **kwargs) -> list[State]:
         raise NotImplementedError
     
     @abc.abstractmethod
-    def is_model_response_correct(self, task:Task, final_state: State | None) -> bool:
+    def is_model_response_correct(self, **kwargs) -> bool:
         raise NotImplementedError
     
     @abc.abstractmethod
@@ -58,7 +81,11 @@ class Environment(Register):
         return self._task
     
     @abc.abstractmethod
-    def save_results(self, final_state: State|None, file_pointer) -> None:
+    def get_statistics(self, final_state: State|None, **kwargs) -> dict[str, object]:
+        raise NotImplementedError
+    
+    @abc.abstractmethod
+    def get_columns(self) -> list[str]:
         raise NotImplementedError
 
 import csv 

@@ -12,86 +12,108 @@ class Solver(Register):
         super().__init__(**kwargs)
 
     @abc.abstractmethod
-    def solve(self, initial_state:State) -> State:
+    def solve(self, **kwargs) -> State:
         raise NotImplementedError
+    
 
 class BeamSearchSolver(Solver):    
-    def solve(self) -> State:
-        initial_state = self._environment.get_initial_state()
+    def solve(self, **kwargs) -> State:
+        log_file = kwargs.get("log_file", None)
+        
+        try:
+            initial_state = self._environment.get_initial_state()
+        except Exception as e:
+            if log_file:
+                log_file.write(f"Error in get_initial_state: {e}\n")
+            raise ExpectedError("Error when retrieving initial state") from e
+        
         steps = self.__dict__.get("steps")
         states = [initial_state]
         heapq.heapify(states)
         for i in range(steps):
-            s = heapq.heappop(states)
-            print(f"Step {i}: {s._data}")
-            successors:list[State] = self._environment.expand(s)
-            self._environment.evaluate(successors)
+            state = heapq.heappop(states)
+            if log_file:
+                log_file.write(f"beam-search(state={state}, step={i})\n")
+            
+            try:
+                successors: list[State] = self._environment.expand(state)
+            except Exception as e:
+                if log_file:
+                    log_file.write(f"Error in expand for {state}: {e}\n")
+                raise ExpectedError(f"Error when expanding state {state} : {e}") from e
+            
+            try:
+                self._environment.evaluate(successors)
+            except Exception as e:
+                if log_file:
+                    log_file.write(f"Error in evaluate for successors from {state}: {e}\n")
+                raise ExpectedError(f"Error during evaluation of successors : {e}") from e
+            
             for succ in successors:
                 heapq.heappush(states, succ)
-        return heapq.heappop(states)
-    
+
+        result = heapq.heappop(states)
+        return result
     @classmethod
     def get_entries(cls) -> list[str]:
         return ["beam-search"]
 
 
-def check_symmetries(environment: Environment, symmetry_level: str, s1: State, s2: State) -> bool:
-    if symmetry_level == "weak":
-        return sorted(s1._data.split(' ')) == sorted(s2._data.split(' '))
-    elif symmetry_level in ["medium", "strong"]:
-        p_tokens = 0.5 if symmetry_level == "strong" else 0.75
-        assert hasattr(environment, "_model") and isinstance(environment._model, Model) and callable(environment._model.tokenize), "The successor generator does not have a valid _model attribute with a callable tokenize method."
-        tokenized_s1 = sorted(environment._model.tokenize(s1._data))
-        tokenized_s2 = sorted(environment._model.tokenize(s2._data))
-        i = j = common = 0
-        while i < len(tokenized_s1) and j < len(tokenized_s2):
-            if tokenized_s1[i] == tokenized_s2[j]:
-                common += 1
-                i += 1
-                j += 1
-            elif tokenized_s1[i] < tokenized_s2[j]:
-                i += 1
-            else:
-                j += 1
-        return common > len(tokenized_s1) * p_tokens
-    else:
-        raise ValueError(f"Invalid value for symmetry_level: {symmetry_level}")
-
-
 class DepthFirstSearchSolver(Solver):
-    def solve(self) -> State | None:
-        initial_state = self._environment.get_initial_state()
+    def solve(self, **kwargs) -> State | None:
+        log_file = kwargs.get("log_file", None)
+        try:
+            initial_state = self._environment.get_initial_state()
+        except Exception as e:
+            if log_file:
+                log_file.write(f"Error in get_initial_state: {e}\n")
+            raise ExpectedError(f"Error when retrieving initial state : {e}") from e
+
         steps = self.__dict__.get("steps")
         symmetry_level = self.__dict__.get("symmetry_level")
-        states_explored_by_depth = [set() for _ in range(self.steps + 1)]
+        states_explored_by_depth = [set() for _ in range(steps + 1)]
         explored_states = set()
-        budget = self.__dict__.get("budget")
         stack = [(initial_state, steps)]
+        
         while stack:
             state, step = stack.pop()
-            print(f"dfs(state={state._data}, steps={step}, budget={budget})")
+            if log_file:
+                log_file.write(f"dfs(state={state}, steps={step})\n")
             
-            if self._environment.is_goal_state(state): 
-                return state
+            try:
+                if self._environment.is_goal_state(state):
+                    return state
+            except Exception as e:
+                if log_file:
+                    log_file.write(f"Error in is_goal_state for {state}: {e}\n")
+                raise ExpectedError(f"Error when checking if state is goal [{state}] : {e}") from e
 
-            if step == 0 or budget == 0: 
+            if step == 0:
                 continue
 
             if state in explored_states:
                 continue
-            
-            if symmetry_level and any(check_symmetries(self._environment, symmetry_level, state, explored_state)
-                for explored_state in states_explored_by_depth[step]):
-                print(f"Symmetry detected [{symmetry_level}]: {state._data}")
+
+            if symmetry_level and any(
+                state.is_symmetric(explored_state, symmetry_level, self._environment._model)
+                for explored_state in states_explored_by_depth[step]
+            ):
+                if log_file:
+                    log_file.write(f"Symmetry detected [{symmetry_level}]: {state}\n")
                 continue
-            
-            budget -= 1
-            explored_states.add(state)
+
+            try:
+                successors = self._environment.expand(state)
+            except Exception as e:
+                if log_file:
+                    log_file.write(f"Error in expand for {state}: {e}\n")
+                raise ExpectedError(f"Error when expanding state [{state}] : {e}") from e
+
             states_explored_by_depth[step].add(state)
-            print(f"Expanding {state._data}")
-            successors = self._environment.expand(state)
+            explored_states.add(state)
             for succ in successors:
-                print(f"\t{state._data} ---[{state.get_action_to_child(succ)}]--> {succ._data}")
+                if log_file:
+                    log_file.write(f"\t{state} ---[{state.get_action_to_child(succ)}]--> {succ}\n")
                 stack.append((succ, step - 1))
         return None
 

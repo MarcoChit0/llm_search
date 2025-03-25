@@ -1,4 +1,7 @@
+from __future__ import annotations
+from typing import Counter
 from llm_search.environments.environment import *
+
 import os
 
 class Game24Task(Task):
@@ -10,8 +13,24 @@ class Game24Task(Task):
             index=index,
             **kwargs)
     
-    def get_initial_state(self) -> State:
-        return State(self._puzzle, is_initial_state=True)
+    def __str__(self) -> str:
+        return self._data
+
+    def get_initial_state(self) -> Game24State:
+        return Game24State(self._puzzle, is_initial_state=True)
+
+class Game24State(State):
+    def __init__(self, data: str, parent: State | None = None, action: str | None = None) -> None:
+        super().__init__(data, parent, action)
+
+    def is_symmetric(self, other: Game24State, symmetry_level: str, model:Model) -> bool:
+        if symmetry_level == "weak":
+            return sorted(self._data.split(' ')) == sorted(other._data.split(' '))
+        elif symmetry_level in ["medium", "strong"]:
+            p_tokens = 0.5 if symmetry_level == "strong" else 0.75
+            return tokens_similarity(model.tokenize(self._data), model.tokenize(other._data), p_tokens)
+        else:
+            raise CriticalError(f"Symmetry : Invalid symmetry level [{symmetry_level}].")
 
 class Game24Environment(Environment):
     '''
@@ -29,9 +48,9 @@ class Game24Environment(Environment):
         self._data_file_path = os.path.join(os.path.dirname(__file__), "data.csv")
 
     def _initialize(self, **kwargs) -> None:
-        idx = kwargs.get("index")
-        puz = kwargs.get("instance")
-        assert idx is not None or puz is not None, "Missing the argument index or puzzle for initialization."
+        idx = kwargs.get("index", None)
+        puz = kwargs.get("instance", None)
+        assert idx or puz, "Missing the argument index or puzzle for initialization."
         if idx:
             df = pd.read_csv(self._data_file_path)
             puzzle = df.iloc[idx]["Puzzles"]
@@ -42,7 +61,7 @@ class Game24Environment(Environment):
             assert all(num.isdigit() for num in numbers), "Invalid puzzle format."
             puzzle = puz
         self._task = Game24Task(puzzle, "Yes" if self.ground_truth(list(map(int, puzzle.split()))) else "No", idx)
-        self._initial_state = State(puzzle)
+        self._initial_state = Game24State(puzzle)
   
     def ground_truth(self, puzzle: list[int]):
         if len(puzzle) == 1:
@@ -71,15 +90,14 @@ class Game24Environment(Environment):
                         return True
         return False
 
-    def is_model_response_correct(self, task: Task, final_state: State | None):
+    def is_model_response_correct(self, **kwargs):
+        final_state = kwargs.get("final_state", None)
         if final_state is None:
-            if task._answer == "Yes":
+            if self._task._answer == "Yes":
                 error_message = "There is a solution and the model did not found it."
                 return False, error_message
             else:
                 return True, "There are no solution and the model did not found it."
-
-        final_state.print()
 
         path = []
         curr = final_state
@@ -144,16 +162,19 @@ class Game24Environment(Environment):
 
         return True, "There are a valid solution and the model found it."
     
-    def save_results(self, final_state, file_pointer) -> None:
-        is_correct, error_message = self.is_model_response_correct(self._task, final_state)
-        row = {
+    def get_statistics(self, final_state : State | None, **kwargs) -> dict[str, object]:
+        is_correct, error_message = self.is_model_response_correct(final_state=final_state)
+        row = self._model.get_statistics()
+        row.update({
             "puzzle": self._task._puzzle,
-            "is_correct": is_correct,
+            "correct": is_correct,
             "message": error_message,
             "index": self._task._index,
-        }
-        row.update(self._model.get_statistics())
-        dict_to_csv(row, file_pointer)
+        })
+        return row
+
+    def get_columns(self) -> list[str]:
+        return ["puzzle", "correct", "message", "index"]
 
     def wrap_successor_generator_prompt(self, state) -> str:
         successor_generator = self.__dict__.get("successor_generator")
@@ -226,34 +247,38 @@ Now, generate all the possible next steps for the following input:
 Input: {input}
 All possible next steps:""".format(input=state._data, candidate_steps='\n'.join(list(state._children.keys())))
         else:
-            raise ValueError(f"Invalid successor generator: {successor_generator}")
+            raise CriticalError(f"Wrap : Invalid successor generator [{successor_generator}].")
         
     def apply_action(self, state, action):
         successor_generator = self.__dict__.get("successor_generator")
         if successor_generator in ['propose', 'propose-all']:
             successor_data = action.split('left: ')[1].replace(')', '').strip()
-            return State(successor_data, state, action)
+            return Game24State(successor_data, state, action)
         else:
-            raise ValueError(f"Invalid successor generator: {successor_generator}")
+            raise CriticalError(f"Apply : Invalid successor generator [{successor_generator}].")
     
-    def expand(self, state):
-        successors = []
-        for action in self.get_available_actions(state):
-            successor = self.apply_action(state, action)
-            successors.append(successor)
-        return successors
-        
+    def expand(self, state, **kwargs):
+        log_file = kwargs.get("log_file", None)
+        if log_file: log_file.write(f"expand({state})")
+        try:
+            successors = []
+            for action in self.get_available_actions(state):
+                successor = self.apply_action(state, action)
+                successors.append(successor)
+            if log_file: log_file.write(f" -> produced {len(successors)} successors\n")
+            return successors
+        except Exception as e:
+            raise ExpectedError(f"Expand : {e}") from e
     
     def get_available_actions(self, state):
         if state not in self._available_actions:
             successor_generator = self.__dict__.get("successor_generator")
             ACTION_PATTERN = r'^\s*\d+(?:\.\d+)?\s*[\+\-\/\*]\s*\d+(?:\.\d+)?\s*=\s*\d+(?:\.\d+)?\s*\(left:\s*(?:\d+(?:\.\d+)?(?:\s+\d+(?:\.\d+)?)*?)\)\s*$'
-            if successor_generator in ["propose", "propose-all"]:
+            try:
                 prompt = self.wrap_successor_generator_prompt(state)
-            else:
-                raise ValueError(f"Invalid successor generator: {successor_generator}")
-            
-            response = self._model.generate_text(prompt)
+                response = self.generate(prompt)
+            except Exception as e:
+                raise ExpectedError(f"Available actions : {e}") from e
             actions = []
             for r in response:
                 for a in r.split('\n'):
@@ -294,16 +319,19 @@ Candidate steps:
 
 Vote:""".format(input=state._data, candidate_steps='\n'.join(list(state._children.keys())))
         else:
-            raise ValueError(f"Invalid state evaluator: {state_evaluator}")
+            raise CriticalError(f"Wrap : Invalid state evaluator [{state_evaluator}].")
     
-    def evaluate(self, states: list[State]) -> None:
+    def evaluate(self, states: list[Game24State]) -> None:
         state_evaluator = self.__dict__.get("state_evaluator")
         if state_evaluator == "vote":
             assert isinstance(states, list) and len(states) > 1, "Invalid input for vote evaluation."
-            parent_state:State = states[0]._parent
+            parent_state:Game24State = states[0]._parent
             if parent_state is None:
-                raise ValueError("Missing the argument parent_state for vote evaluation.")
-            voted_states = self._model.generate_text(self.wrap_state_evaluation_prompt(parent_state))
+                raise CriticalError("Evaluate : Missing parent_state.")
+            try:
+                voted_states = self.generate(self.wrap_state_evaluation_prompt(parent_state))
+            except Exception as e:
+                raise ExpectedError(f"Evaluate : {e}") from e
             states_batch_votes = {action:0 for action in parent_state._children.keys()}
             for voted_state in voted_states:
                 if voted_state in states_batch_votes:
@@ -313,7 +341,7 @@ Vote:""".format(input=state._data, candidate_steps='\n'.join(list(state._childre
             best_action = np.random.choice(best_actions)
             parent_state._children[best_action]._value = 0
         else:
-            raise ValueError(f"Invalid state evaluator: {state_evaluator}")
+            raise CriticalError(f"Evaluate : Invalid state evaluator [{state_evaluator}].")
         
-    def is_goal_state(self, state: State) -> bool:
+    def is_goal_state(self, state: Game24State) -> bool:
         return state._data == "24"

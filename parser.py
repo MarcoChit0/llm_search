@@ -1,7 +1,14 @@
 import tap
 from llm_search.register import get_available_entries
+import datetime
+import pandas as pd
 
 class Parser(tap.Tap):
+    # experiment parameters
+    path: str
+    save_state: bool
+    load_state: bool
+
     # registries
     model: str
     solver:str
@@ -49,5 +56,28 @@ class Parser(tap.Tap):
         self.add_argument("-sg", "--successor_generator")
         self.add_argument("-se", "--state_evaluator")
 
+        self.add_argument("-p", "--path", default=datetime.datetime.now().isoformat())
+        self.add_argument("--save_state", default=True, action="store_false")
+        self.add_argument("--load_state", default=True, action="store_false")
+
     def check_args(self) -> None:
         assert self.instance is not None or (self.index_start is not None and self.index_end is not None), "Either instance or index_start and index_end must be provided."
+    
+    def to_dataframe(self) -> pd.DataFrame:
+        # save registries, model parameters, environment parameters, and solver parameters
+        return pd.DataFrame({
+            "model": [self.model],
+            "solver": [self.solver],
+            "environment": [self.environment],
+            "device": [self.device],
+            "max_output_tokens": [self.max_output_tokens],
+            "candidate_count": [self.candidate_count],
+            "do_sample": [self.do_sample],
+            "temperature": [self.temperature],
+            "load_in_8bit": [self.load_in_8bit],
+            "successor_generator": [self.successor_generator],
+            "state_evaluator": [self.state_evaluator],
+            "steps": [self.steps],
+            "symmetry_level": [self.symmetry_level],
+            "budget": [self.budget],
+        })
