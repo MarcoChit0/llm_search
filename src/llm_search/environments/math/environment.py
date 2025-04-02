@@ -3,6 +3,7 @@ import pandas as pd
 from llm_search.environments.environment import *
 from llm_search.models import *
 import csv
+import re
 
 class MathState(State):
     def __init__(self, data: list[dict[str, str]], parent: State | None = None, action: str | None = None) -> None:
@@ -91,7 +92,7 @@ class MathEnvironment(Environment):
         if log_file: log_file.write(f" -> produced {len(response)} successors\n")
         successors = []
         for i in range(len(response)):
-            successors.append(MathState(response[i], parent=state, action=f"Action #{i}"))
+            successors.append(MathState(response[i], parent=state, action=f"Attempt {i}"))
         return successors
         
     def wrap_state_evaluation_prompt(self, state: State) -> str:
@@ -104,10 +105,24 @@ class MathEnvironment(Environment):
             path.append(cur)
             cur = cur._parent
         path.reverse()
-        prompt = "For the following problem, vote for the best solution, informing only its number.\n\n"
-        prompt += "Problem Specification:\n" + path[0]._data + "\n\n"
-        for i in range(len(state._parent._children)):
-            prompt += f"Attempt {i}:\n" + path[i+1]._data + "\n\n"
+        prompt = """# Goal:
+For the problem bellow, select the best attempt among the following ones to solve the problem.
+
+# Output Format:
+Only return the index of the best attempt.
+
+# Warnings:
+
+- Do not include any additional information, steps, or explanations.
+- For selecting the best approach, consider the clarity of the reasoning and the correctness of the solution.
+
+# Context:
+ 
+## Problem Specification:
+"""
+        prompt += f"{path[0]._data['content']}\n\n## Attempts:\n\n"
+        for action, state in state._parent._children.items():
+            prompt += f"### {action}:\n{state._data[-1]['content']}\n\n"
         return prompt
 
     def evaluate(self, states: list[State]) -> None:
@@ -120,13 +135,29 @@ class MathEnvironment(Environment):
                 raise CriticalError("Evaluate : Missing parent_state.")
             try:
                 prompt = self.wrap_state_evaluation_prompt(parent_state)
-                voted_states = self.generate(prompt)
+                votes = self.generate(prompt)
             except Exception as e:
                 raise ExpectedError(f"Evaluate : {e}") from e
-            states_batch_votes = {action:0 for action in parent_state._children.keys()}
-            for voted_state in voted_states:
-                if voted_state in states_batch_votes:
-                    states_batch_votes[voted_state] += 1
+            states_batch_votes = {action : 0 for action in parent_state._children.keys()}
+            map_indexes_into_actions = {i: action for i, action in enumerate(parent_state._children.keys())}
+            for vote in votes:
+                # vote is "Attempt idx"
+                if vote in states_batch_votes:
+                    states_batch_votes[vote] += 1
+                else:
+                    # vote is "idx"
+                    try:
+                        m = re.search(r"(\d+)", vote)
+                        if m is None:
+                            raise ExpectedError(f"Evaluate : Invalid vote [{vote}].")
+                        idx = int(m.group(1))
+                        action = map_indexes_into_actions.get(idx)
+                        if action is None:
+                            raise ExpectedError(f"Evaluate : Invalid vote index [{idx}] in vote [{vote}].")
+                        states_batch_votes[action] += 1
+                    except:
+                        raise ExpectedError(f"Evaluate : Invalid vote [{vote}].")
+                    
             max_votes = max(states_batch_votes.values())
             best_actions = [action for action, votes in states_batch_votes.items() if votes == max_votes]
             best_action = np.random.choice(best_actions)

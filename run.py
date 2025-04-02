@@ -178,6 +178,10 @@ if __name__ == "__main__":
         run(df_state, f"instance_[{parser.instance}]", instance=parser.instance, save_state=parser.save_state)
     else:
         same_parameters = check_parameters(parser)
+        # overwrite state file if parameters have changed
+        if not same_parameters:
+            df_state = pd.DataFrame(columns=env.get_columns())
+            df_state.to_csv(state_file, index=False)
         for idx in range(parser.index_start, parser.index_end + 1):
             if same_parameters and should_skip_instance(df_state, idx, parser.load_state):
                 msg = f"Skipping instance {idx}: already completed."
